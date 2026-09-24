@@ -1,6 +1,13 @@
 import numpy as np
+import pandas as pd
 
-from src.synth import SEED, generate_partner_master
+from src.synth import (
+    HISTORY_END_DATE,
+    N_WEEKS,
+    SEED,
+    generate_distribution_history,
+    generate_partner_master,
+)
 
 
 def test_partner_master_structure():
@@ -77,3 +84,116 @@ def test_base_weekly_demand_matches_tier():
         low, high = tier_ranges[row["demand_tier"]]
 
         assert low <= row["base_weekly_demand"] <= high
+
+def test_distribution_history_has_78_weeks():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    assert distribution["date"].nunique() == N_WEEKS
+
+
+def test_distribution_history_schema():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    expected_columns = [
+        "date",
+        "site_id",
+        "site_name",
+        "product",
+        "size",
+        "quantity",
+        "households_served",
+        "children_served",
+    ]
+
+    assert list(distribution.columns) == expected_columns
+
+
+def test_diaper_size_mix_pattern():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    diaper_mix = (
+        distribution
+        .groupby("size")["quantity"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    top_two = set(diaper_mix.head(2).index)
+    bottom_two = set(diaper_mix.tail(2).index)
+
+    assert top_two == {"4", "5"}
+    assert bottom_two == {"N", "7"}
+
+
+def test_mid_series_partner_start_dates():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    dates = pd.date_range(
+        end=HISTORY_END_DATE,
+        periods=N_WEEKS,
+        freq="W-MON",
+    )
+
+    site_24_first_date = distribution.loc[
+        distribution["site_id"] == "SITE_024",
+        "date",
+    ].min()
+
+    site_25_first_date = distribution.loc[
+        distribution["site_id"] == "SITE_025",
+        "date",
+    ].min()
+
+    assert site_24_first_date == dates[30]
+    assert site_25_first_date == dates[50]
+
+
+def test_site_08_has_six_week_gap():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    dates = pd.date_range(
+        end=HISTORY_END_DATE,
+        periods=N_WEEKS,
+        freq="W-MON",
+    )
+
+    gap_dates = set(dates[35:41])
+
+    site_08_dates = set(
+        distribution.loc[
+            distribution["site_id"] == "SITE_008",
+            "date",
+        ]
+    )
+
+    assert gap_dates.isdisjoint(site_08_dates)

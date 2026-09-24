@@ -13,6 +13,21 @@ N_WEEKS = 78
 N_SITES = 25
 MESSY_ROW_RATE = 0.03
 
+HISTORY_END_DATE = pd.Timestamp("2026-09-21")
+
+DIAPER_SIZES = ["N", "1", "2", "3", "4", "5", "6", "7"]
+
+BASE_DIAPER_MIX = {
+    "N": 0.03,
+    "1": 0.08,
+    "2": 0.12,
+    "3": 0.17,
+    "4": 0.24,
+    "5": 0.23,
+    "6": 0.10,
+    "7": 0.03,
+}
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "data" / "sample"
 
@@ -194,6 +209,68 @@ def generate_partner_master(rng):
 
     return partner_df
 
+def get_diaper_size_mix(agency_type):
+    """
+    Return an agency-adjusted diaper size mix.
+
+    The network baseline peaks at sizes 4 and 5.
+    Agency-type multipliers create realistic variation
+    while preserving the overall network pattern.
+    """
+
+    multipliers = {
+        "N": 1.0,
+        "1": 1.0,
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 1.0,
+        "6": 1.0,
+        "7": 1.0,
+    }
+
+    if agency_type == "shelter":
+        multipliers.update({
+            "N": 0.75,
+            "1": 0.80,
+            "2": 0.90,
+            "4": 1.10,
+            "5": 1.20,
+            "6": 1.20,
+            "7": 1.10,
+        })
+
+    elif agency_type == "wic_clinic":
+        multipliers.update({
+            "N": 1.50,
+            "1": 1.35,
+            "2": 1.20,
+            "4": 0.90,
+            "5": 0.80,
+            "6": 0.75,
+            "7": 0.70,
+        })
+
+    elif agency_type == "school":
+        multipliers.update({
+            "N": 0.70,
+            "1": 0.80,
+            "2": 0.90,
+            "3": 1.05,
+            "4": 1.15,
+            "5": 1.15,
+            "6": 1.05,
+        })
+
+    adjusted_mix = np.array(
+        [
+            BASE_DIAPER_MIX[size] * multipliers[size]
+            for size in DIAPER_SIZES
+        ],
+        dtype=float,
+    )
+
+    return adjusted_mix / adjusted_mix.sum()
 
 # ---------------------------------------------------------
 # 2. Historical distributions
@@ -201,18 +278,131 @@ def generate_partner_master(rng):
 
 def generate_distribution_history(partners, rng):
     """
-    Generate 78 weeks of clean historical distribution data.
+    Generate clean weekly diaper distribution history.
 
-    The distribution history should reflect:
-    - partner demand scale
+    The history includes:
+    - 78 weeks
     - agency-specific diaper size mix
-    - product coverage
-    - weekly variability
-    - intermittent demand
+    - weekly demand variability
+    - mild seasonality
     - two mid-series partner starts
-    - one six-week activity gap
+    - one six-week inactivity gap
+
+    Additional product categories will be added separately.
     """
-    pass
+
+    dates = pd.date_range(
+        end=HISTORY_END_DATE,
+        periods=N_WEEKS,
+        freq="W-MON",
+    )
+
+    rows = []
+
+    for _, partner in partners.iterrows():
+
+        site_id = partner["site_id"]
+        agency_type = partner["agency_type"]
+        onboarding_week = int(partner["onboarding_week"])
+        base_demand = int(partner["base_weekly_demand"])
+
+        size_mix = get_diaper_size_mix(agency_type)
+
+        for week_index, date in enumerate(dates):
+
+            # Partner has not started operating yet
+            if week_index < onboarding_week:
+                continue
+
+            # Required six-week inactive gap for Site 08
+            if (
+                site_id == "SITE_008"
+                and 35 <= week_index <= 40
+            ):
+                continue
+
+            # Mild demand seasonality
+            seasonal_factor = 1.0
+
+            if date.month in [6, 7, 8]:
+                seasonal_factor *= 0.95
+
+                if agency_type == "school":
+                    seasonal_factor *= 0.80
+
+            elif date.month in [11, 12]:
+                seasonal_factor *= 1.05
+
+            expected_weekly_demand = (
+                base_demand * seasonal_factor
+            )
+
+            weekly_demand = int(
+                round(
+                    rng.normal(
+                        loc=expected_weekly_demand,
+                        scale=expected_weekly_demand * 0.12,
+                    )
+                )
+            )
+
+            weekly_demand = max(
+                weekly_demand,
+                0,
+            )
+
+            if weekly_demand == 0:
+                continue
+
+            size_quantities = rng.multinomial(
+                weekly_demand,
+                size_mix,
+            )
+
+            for size, quantity in zip(
+                DIAPER_SIZES,
+                size_quantities,
+            ):
+
+                if quantity == 0:
+                    continue
+
+                children_served = max(
+                    1,
+                    int(
+                        round(
+                            quantity
+                            / rng.uniform(35, 55)
+                        )
+                    ),
+                )
+
+                households_served = max(
+                    1,
+                    int(
+                        round(
+                            children_served
+                            / rng.uniform(1.1, 1.5)
+                        )
+                    ),
+                )
+
+                rows.append(
+                    {
+                        "date": date,
+                        "site_id": site_id,
+                        "site_name": partner["site_name"],
+                        "product": "diaper",
+                        "size": size,
+                        "quantity": int(quantity),
+                        "households_served": households_served,
+                        "children_served": children_served,
+                    }
+                )
+
+    distribution_df = pd.DataFrame(rows)
+
+    return distribution_df
 
 
 # ---------------------------------------------------------
