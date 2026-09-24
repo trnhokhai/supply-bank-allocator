@@ -73,6 +73,8 @@ Pull-ups will be present at 8 partner sites.
 
 Adult incontinence products will be present at 3 partner sites.
 
+Product coverage will be assigned using agency-type-informed weighted random sampling rather than uniform random selection. The generator will still enforce exactly 10 period-product sites, 8 pull-up sites, and 3 adult-incontinence sites while giving higher selection probability to agency types that are more plausible for each product category.
+
 ## 4. Diaper Size-Mix Design
 
 The generated demand pattern will intentionally place the highest demand in:

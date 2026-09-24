@@ -101,23 +101,80 @@ def generate_partner_master(rng):
         "onboarding_week",
     ] = 50
 
-    # Assign product coverage
-    period_sites = rng.choice(
-        partner_df.index,
-        size=10,
-        replace=False,
+        # -----------------------------------------------------
+    # Agency-aware product coverage
+    # -----------------------------------------------------
+
+    def select_sites_by_weight(count, agency_weights):
+        """
+        Select partner sites without replacement using
+        agency-type-informed probabilities.
+
+        The weights are synthetic design assumptions used
+        to create more realistic product coverage patterns.
+        """
+
+        weights = (
+            partner_df["agency_type"]
+            .map(agency_weights)
+            .fillna(1.0)
+            .astype(float)
+            .to_numpy()
+        )
+
+        probabilities = weights / weights.sum()
+
+        return rng.choice(
+            partner_df.index.to_numpy(),
+            size=count,
+            replace=False,
+            p=probabilities,
+        )
+
+
+    period_weights = {
+        "school": 2.5,
+        "shelter": 2.0,
+        "health_center": 1.8,
+        "pantry": 1.4,
+        "wic_clinic": 1.2,
+        "faith_community": 1.0,
+        "other": 1.0,
+    }
+
+    pullup_weights = {
+        "wic_clinic": 2.5,
+        "shelter": 2.0,
+        "pantry": 1.6,
+        "health_center": 1.2,
+        "school": 1.0,
+        "faith_community": 1.0,
+        "other": 1.0,
+    }
+
+    adult_incontinence_weights = {
+        "health_center": 3.0,
+        "pantry": 1.7,
+        "faith_community": 1.5,
+        "other": 1.3,
+        "shelter": 1.0,
+        "school": 0.5,
+        "wic_clinic": 0.5,
+    }
+
+    period_sites = select_sites_by_weight(
+        count=10,
+        agency_weights=period_weights,
     )
 
-    pullup_sites = rng.choice(
-        partner_df.index,
-        size=8,
-        replace=False,
+    pullup_sites = select_sites_by_weight(
+        count=8,
+        agency_weights=pullup_weights,
     )
 
-    adult_sites = rng.choice(
-        partner_df.index,
-        size=3,
-        replace=False,
+    adult_sites = select_sites_by_weight(
+        count=3,
+        agency_weights=adult_incontinence_weights,
     )
 
     partner_df.loc[
