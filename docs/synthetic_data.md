@@ -300,6 +300,23 @@ Initial multipliers:
 
 These values may be adjusted during validation if the resulting donation pattern is unrealistic.
 
+### 11.6.1 Incoming Supply Planning Horizon
+
+The synthetic incoming-supply schedule will cover 52 future weeks.
+
+Incoming supply will include:
+
+- Community diaper donations
+- A spring donation drive
+- A holiday donation drive
+- Targeted purchases for high-demand diaper sizes
+- Planned purchases for other product categories
+- Both `confirmed` and `pending` supply records
+
+Community diaper donations will intentionally cover only part of expected demand, preserving scarcity in the simulated planning environment.
+
+Targeted diaper purchases will focus on sizes 4, 5, and 6 to represent operational purchasing decisions intended to partially correct the donation-versus-demand size mismatch.
+
 ### 11.7 Current Inventory Test Conditions
 
 The current inventory snapshot will intentionally contain visible long and short diaper sizes.

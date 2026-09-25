@@ -9,6 +9,7 @@ from src.synth import (
     generate_partner_master,
     generate_partner_survey,
     generate_current_inventory,
+    generate_incoming_supply,
 )
 
 
@@ -570,3 +571,157 @@ def test_diaper_inventory_has_long_and_short_sizes():
 
     assert weeks_of_supply["5"] < 3
     assert weeks_of_supply["6"] < 3
+
+def test_incoming_supply_structure():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    expected_columns = [
+        "expected_date",
+        "source",
+        "product",
+        "size",
+        "quantity",
+        "status",
+    ]
+
+    assert list(incoming.columns) == expected_columns
+
+    assert (
+        incoming["expected_date"]
+        > HISTORY_END_DATE
+    ).all()
+
+    assert (
+        incoming["quantity"] > 0
+    ).all()
+
+
+def test_incoming_supply_has_both_statuses():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    assert set(incoming["status"]) == {
+        "confirmed",
+        "pending",
+    }
+
+
+def test_donation_diaper_mix_skews_small():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    donations = incoming.loc[
+        incoming["source"].isin(
+            [
+                "Community Donations",
+                "Spring Donation Drive",
+                "Holiday Donation Drive",
+            ]
+        )
+        & (
+            incoming["product"]
+            == "diaper"
+        )
+    ]
+
+    donation_mix = (
+        donations
+        .groupby("size")["quantity"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    top_three = set(
+        donation_mix.head(3).index
+    )
+
+    assert top_three == {
+        "N",
+        "1",
+        "2",
+    }
+
+
+def test_donation_seasonality_and_drives():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    sources = set(incoming["source"])
+
+    assert "Spring Donation Drive" in sources
+    assert "Holiday Donation Drive" in sources
+
+    community_donations = incoming.loc[
+        incoming["source"]
+        == "Community Donations"
+    ].copy()
+
+    weekly_donations = (
+        community_donations
+        .groupby("expected_date")["quantity"]
+        .sum()
+    )
+
+    summer_mask = (
+        weekly_donations.index.month
+        .isin([6, 7, 8])
+    )
+
+    summer_average = (
+        weekly_donations.loc[
+            summer_mask
+        ].mean()
+    )
+
+    non_summer_average = (
+        weekly_donations.loc[
+            ~summer_mask
+        ].mean()
+    )
+
+    assert summer_average < non_summer_average

@@ -28,6 +28,19 @@ BASE_DIAPER_MIX = {
     "7": 0.03,
 }
 
+DONATION_DIAPER_MIX = {
+    "N": 0.22,
+    "1": 0.24,
+    "2": 0.20,
+    "3": 0.14,
+    "4": 0.09,
+    "5": 0.06,
+    "6": 0.04,
+    "7": 0.01,
+}
+
+INCOMING_HORIZON_WEEKS = 52
+
 PULLUP_SIZES = ["2T-3T", "3T-4T", "4T-5T"]
 
 PULLUP_MIX = {
@@ -1042,17 +1055,258 @@ def generate_current_inventory(distribution_df, rng):
 # 5. Incoming donations and purchases
 # ---------------------------------------------------------
 
-def generate_incoming_supply(rng):
+def generate_incoming_supply(distribution_df, rng):
     """
-    Generate future inbound supply.
+    Generate 52 weeks of future synthetic inbound supply.
 
-    Donation behavior should include:
-    - bias toward N, 1, and 2
-    - confirmed and pending records
-    - spring and holiday donation-drive effects
-    - summer donation trough
+    The schedule includes:
+    - diaper donations biased toward N, 1, and 2
+    - one holiday donation drive
+    - one spring donation drive
+    - a summer donation trough
+    - targeted diaper purchases
+    - recurring purchases for other product categories
+    - both confirmed and pending records
     """
-    pass
+
+    future_dates = pd.date_range(
+        start=HISTORY_END_DATE + pd.DateOffset(weeks=1),
+        periods=INCOMING_HORIZON_WEEKS,
+        freq="W-MON",
+    )
+
+    recent_dates = sorted(
+        distribution_df["date"].unique()
+    )[-8:]
+
+    recent_distribution = distribution_df.loc[
+        distribution_df["date"].isin(recent_dates)
+    ]
+
+    average_weekly_demand = (
+        recent_distribution
+        .groupby(["product", "size"])["quantity"]
+        .sum()
+        .div(len(recent_dates))
+        .reset_index(name="avg_weekly_demand")
+    )
+
+    diaper_demand = average_weekly_demand.loc[
+        average_weekly_demand["product"] == "diaper"
+    ]
+
+    total_weekly_diaper_demand = (
+        diaper_demand["avg_weekly_demand"].sum()
+    )
+
+    diaper_demand_by_size = (
+        diaper_demand
+        .set_index("size")["avg_weekly_demand"]
+        .to_dict()
+    )
+
+    donation_probabilities = np.array(
+        [
+            DONATION_DIAPER_MIX[size]
+            for size in DIAPER_SIZES
+        ],
+        dtype=float,
+    )
+
+    donation_probabilities = (
+        donation_probabilities
+        / donation_probabilities.sum()
+    )
+
+    # Donation volume intentionally covers only part of
+    # network demand.
+    base_weekly_donation = (
+        total_weekly_diaper_demand * 0.45
+    )
+
+    spring_drive_date = next(
+        date
+        for date in future_dates
+        if date.month == 4
+    )
+
+    holiday_drive_date = next(
+        date
+        for date in future_dates
+        if date.month == 12
+    )
+
+    rows = []
+
+    for week_index, date in enumerate(future_dates):
+
+        seasonal_factor = 1.0
+        drive_factor = 1.0
+        source = "Community Donations"
+
+        if date.month in [6, 7, 8]:
+            seasonal_factor = 0.65
+
+        if date == spring_drive_date:
+            drive_factor = 2.0
+            source = "Spring Donation Drive"
+
+        elif date == holiday_drive_date:
+            drive_factor = 2.3
+            source = "Holiday Donation Drive"
+
+        expected_donation = (
+            base_weekly_donation
+            * seasonal_factor
+            * drive_factor
+        )
+
+        total_donation = int(
+            round(
+                rng.normal(
+                    loc=expected_donation,
+                    scale=max(
+                        expected_donation * 0.10,
+                        1.0,
+                    ),
+                )
+            )
+        )
+
+        total_donation = max(
+            total_donation,
+            0,
+        )
+
+        donation_quantities = rng.multinomial(
+            total_donation,
+            donation_probabilities,
+        )
+
+        # Supply closer to the current date is more likely
+        # to be confirmed.
+        confirmed_probability = (
+            0.85
+            if week_index < 8
+            else 0.60
+        )
+
+        for size, quantity in zip(
+            DIAPER_SIZES,
+            donation_quantities,
+        ):
+
+            if quantity == 0:
+                continue
+
+            status = rng.choice(
+                ["confirmed", "pending"],
+                p=[
+                    confirmed_probability,
+                    1 - confirmed_probability,
+                ],
+            )
+
+            rows.append(
+                {
+                    "expected_date": date,
+                    "source": source,
+                    "product": "diaper",
+                    "size": size,
+                    "quantity": int(quantity),
+                    "status": status,
+                }
+            )
+
+        # -------------------------------------------------
+        # Targeted diaper purchases every four weeks
+        # -------------------------------------------------
+
+        if week_index % 4 == 0:
+
+            for size in ["4", "5", "6"]:
+
+                weekly_size_demand = (
+                    diaper_demand_by_size.get(
+                        size,
+                        0.0,
+                    )
+                )
+
+                purchase_quantity = int(
+                    round(
+                        weekly_size_demand
+                        * rng.uniform(
+                            1.5,
+                            2.0,
+                        )
+                    )
+                )
+
+                if purchase_quantity <= 0:
+                    continue
+
+                rows.append(
+                    {
+                        "expected_date": date,
+                        "source": "Targeted Diaper Purchase",
+                        "product": "diaper",
+                        "size": size,
+                        "quantity": purchase_quantity,
+                        "status": rng.choice(
+                            ["confirmed", "pending"],
+                            p=[0.75, 0.25],
+                        ),
+                    }
+                )
+
+        # -------------------------------------------------
+        # Other-product purchases every four weeks
+        # -------------------------------------------------
+
+        if week_index % 4 == 0:
+
+            other_products = average_weekly_demand.loc[
+                average_weekly_demand["product"]
+                != "diaper"
+            ]
+
+            for _, record in other_products.iterrows():
+
+                expected_quantity = (
+                    float(
+                        record["avg_weekly_demand"]
+                    )
+                    * rng.uniform(
+                        1.5,
+                        2.5,
+                    )
+                )
+
+                quantity = int(
+                    round(expected_quantity)
+                )
+
+                if quantity <= 0:
+                    continue
+
+                rows.append(
+                    {
+                        "expected_date": date,
+                        "source": "Planned Purchase",
+                        "product": record["product"],
+                        "size": record["size"],
+                        "quantity": quantity,
+                        "status": rng.choice(
+                            ["confirmed", "pending"],
+                            p=[0.70, 0.30],
+                        ),
+                    }
+                )
+
+    incoming_supply_df = pd.DataFrame(rows)
+
+    return incoming_supply_df
 
 
 # ---------------------------------------------------------
@@ -1133,8 +1387,9 @@ def main():
     )
 
     incoming_supply_df = generate_incoming_supply(
-        rng,
-    )
+    distribution_df,
+    rng,
+)
 
     messy_distribution_df = inject_messy_distribution_rows(
         distribution_df,
