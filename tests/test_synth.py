@@ -7,6 +7,7 @@ from src.synth import (
     SEED,
     generate_distribution_history,
     generate_partner_master,
+    generate_partner_survey,
 )
 
 
@@ -342,3 +343,103 @@ def test_period_cups_are_intermittent():
     )
 
     assert actual_cup_site_weeks < total_possible_site_weeks
+
+def test_partner_survey_structure():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    expected_columns = [
+        "site_name",
+        "zip_code",
+        "agency_type",
+        "families_served_per_month",
+        "children_under_4_per_month",
+        "menstruating_clients_per_month",
+        "poverty_share_band",
+        "priority_population_flags",
+        "storage_capacity_cases",
+        "distribution_frequency",
+        "recent_stockout_sizes",
+        "preferred_contact",
+        "languages_spoken",
+    ]
+
+    assert len(survey) == 25
+    assert list(survey.columns) == expected_columns
+    assert survey["site_name"].nunique() == 25
+
+    assert set(survey["site_name"]) == set(
+        partners["site_name"]
+    )
+
+
+def test_partner_survey_allowed_values():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    allowed_poverty_bands = {
+        "under_25_percent",
+        "25_to_50_percent",
+        "50_to_75_percent",
+        "over_75_percent",
+    }
+
+    allowed_frequencies = {
+        "weekly",
+        "biweekly",
+        "monthly",
+    }
+
+    assert set(
+        survey["poverty_share_band"]
+    ).issubset(
+        allowed_poverty_bands
+    )
+
+    assert set(
+        survey["distribution_frequency"]
+    ).issubset(
+        allowed_frequencies
+    )
+
+
+def test_partner_survey_numeric_values():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    assert (
+        survey["families_served_per_month"] > 0
+    ).all()
+
+    assert (
+        survey["children_under_4_per_month"] >= 0
+    ).all()
+
+    assert (
+        survey["menstruating_clients_per_month"] >= 0
+    ).all()
+
+    assert (
+        survey["storage_capacity_cases"] > 0
+    ).all()
+
+    assert (
+        survey["zip_code"]
+        .str.fullmatch(r"\d{5}")
+        .all()
+    )

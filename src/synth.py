@@ -505,7 +505,7 @@ def generate_distribution_history(partners, rng):
                         "children_served": children_served,
                     }
                 )
-                
+
             # -------------------------------------------------
             # Wipes
             # -------------------------------------------------
@@ -646,8 +646,294 @@ def generate_partner_survey(partners, rng):
     """
     Generate one completed synthetic intake-survey record
     for each partner site.
+
+    Survey values are linked to partner operating profiles
+    rather than generated independently at random.
     """
-    pass
+
+    children_share_by_agency = {
+        "pantry": 0.45,
+        "shelter": 0.55,
+        "wic_clinic": 0.85,
+        "school": 0.25,
+        "health_center": 0.50,
+        "faith_community": 0.35,
+        "other": 0.40,
+    }
+
+    menstruating_share_by_agency = {
+        "pantry": 0.60,
+        "shelter": 0.70,
+        "wic_clinic": 0.50,
+        "school": 0.90,
+        "health_center": 0.70,
+        "faith_community": 0.55,
+        "other": 0.60,
+    }
+
+    poverty_probabilities = {
+        "pantry": [0.05, 0.15, 0.40, 0.40],
+        "shelter": [0.00, 0.05, 0.25, 0.70],
+        "wic_clinic": [0.00, 0.05, 0.35, 0.60],
+        "school": [0.05, 0.25, 0.50, 0.20],
+        "health_center": [0.05, 0.15, 0.40, 0.40],
+        "faith_community": [0.05, 0.25, 0.40, 0.30],
+        "other": [0.10, 0.25, 0.40, 0.25],
+    }
+
+    poverty_bands = [
+        "under_25_percent",
+        "25_to_50_percent",
+        "50_to_75_percent",
+        "over_75_percent",
+    ]
+
+    storage_ranges = {
+        "small": (30, 70),
+        "medium": (70, 150),
+        "large": (150, 300),
+    }
+
+    distribution_frequency_probs = {
+        "pantry": [0.50, 0.30, 0.20],
+        "shelter": [0.70, 0.25, 0.05],
+        "wic_clinic": [0.20, 0.50, 0.30],
+        "school": [0.20, 0.45, 0.35],
+        "health_center": [0.40, 0.40, 0.20],
+        "faith_community": [0.25, 0.35, 0.40],
+        "other": [0.30, 0.40, 0.30],
+    }
+
+    distribution_frequencies = [
+        "weekly",
+        "biweekly",
+        "monthly",
+    ]
+
+    rows = []
+
+    for _, partner in partners.iterrows():
+
+        agency_type = partner["agency_type"]
+        demand_tier = partner["demand_tier"]
+        base_weekly_demand = int(
+            partner["base_weekly_demand"]
+        )
+
+        site_number = int(
+            partner["site_id"].split("_")[-1]
+        )
+
+        # Approximate monthly families served from
+        # weekly product demand.
+        units_per_family = rng.uniform(35, 55)
+
+        families_served = max(
+            10,
+            int(
+                round(
+                    base_weekly_demand
+                    * 4.33
+                    / units_per_family
+                )
+            ),
+        )
+
+        children_share = (
+            children_share_by_agency[agency_type]
+            * rng.uniform(0.90, 1.10)
+        )
+
+        children_under_4 = max(
+            0,
+            int(
+                round(
+                    families_served
+                    * children_share
+                )
+            ),
+        )
+
+        menstruating_share = (
+            menstruating_share_by_agency[agency_type]
+            * rng.uniform(0.85, 1.15)
+        )
+
+        if partner["has_period_products"]:
+            menstruating_share *= 1.10
+
+        menstruating_clients = max(
+            0,
+            int(
+                round(
+                    families_served
+                    * menstruating_share
+                )
+            ),
+        )
+
+        poverty_share_band = rng.choice(
+            poverty_bands,
+            p=poverty_probabilities[agency_type],
+        )
+
+        # ---------------------------------------------
+        # Priority-population flags
+        # ---------------------------------------------
+
+        priority_flags = []
+
+        if agency_type == "shelter":
+            priority_flags.append(
+                "emergency_shelter"
+            )
+
+            if rng.random() < 0.30:
+                priority_flags.append(
+                    "domestic_violence_program"
+                )
+
+        if agency_type == "school":
+            priority_flags.append(
+                "students"
+            )
+
+        if (
+            agency_type == "wic_clinic"
+            and rng.random() < 0.30
+        ):
+            priority_flags.append(
+                "teen_parents"
+            )
+
+        if (
+            agency_type
+            in {"pantry", "faith_community", "other"}
+            and rng.random() < 0.25
+        ):
+            priority_flags.append(
+                "refugee_or_newly_arrived_families"
+            )
+
+        if (
+            agency_type
+            in {"health_center", "wic_clinic"}
+            and rng.random() < 0.20
+        ):
+            priority_flags.append(
+                "families_with_child_with_disability"
+            )
+
+        if not priority_flags:
+            priority_flags.append("none")
+
+        # ---------------------------------------------
+        # Storage capacity
+        # ---------------------------------------------
+
+        storage_low, storage_high = (
+            storage_ranges[demand_tier]
+        )
+
+        storage_capacity_cases = int(
+            rng.integers(
+                storage_low,
+                storage_high + 1,
+            )
+        )
+
+        # ---------------------------------------------
+        # Distribution frequency
+        # ---------------------------------------------
+
+        distribution_frequency = rng.choice(
+            distribution_frequencies,
+            p=distribution_frequency_probs[
+                agency_type
+            ],
+        )
+
+        # ---------------------------------------------
+        # Recent stockouts
+        # ---------------------------------------------
+
+        if rng.random() < 0.75:
+
+            stockout_count = int(
+                rng.choice(
+                    [1, 2],
+                    p=[0.70, 0.30],
+                )
+            )
+
+            stockout_sizes = rng.choice(
+                ["4", "5", "6"],
+                size=stockout_count,
+                replace=False,
+                p=[0.25, 0.50, 0.25],
+            )
+
+            recent_stockout_sizes = ";".join(
+                stockout_sizes.tolist()
+            )
+
+        else:
+            recent_stockout_sizes = "none"
+
+        # ---------------------------------------------
+        # Languages
+        # ---------------------------------------------
+
+        languages = ["English"]
+
+        optional_languages = {
+            "Spanish": 0.55,
+            "Arabic": 0.12,
+            "French": 0.10,
+            "Vietnamese": 0.08,
+        }
+
+        for language, probability in (
+            optional_languages.items()
+        ):
+            if rng.random() < probability:
+                languages.append(language)
+
+        rows.append(
+            {
+                "site_name": partner["site_name"],
+                "zip_code": f"606{site_number:02d}",
+                "agency_type": agency_type,
+                "families_served_per_month": families_served,
+                "children_under_4_per_month": children_under_4,
+                "menstruating_clients_per_month": (
+                    menstruating_clients
+                ),
+                "poverty_share_band": poverty_share_band,
+                "priority_population_flags": ";".join(
+                    priority_flags
+                ),
+                "storage_capacity_cases": (
+                    storage_capacity_cases
+                ),
+                "distribution_frequency": (
+                    distribution_frequency
+                ),
+                "recent_stockout_sizes": (
+                    recent_stockout_sizes
+                ),
+                "preferred_contact": (
+                    f"site{site_number:02d}@example.org"
+                ),
+                "languages_spoken": ";".join(
+                    languages
+                ),
+            }
+        )
+
+    survey_df = pd.DataFrame(rows)
+
+    return survey_df
 
 
 # ---------------------------------------------------------
