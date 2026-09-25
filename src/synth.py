@@ -1390,14 +1390,13 @@ def inject_messy_distribution_rows(distribution_df, rng):
                 rng.integers(0, 2)
             )
 
-            if variation == 0:
-                messy_size = (
-                    original_size.upper()
-                )
-            else:
-                messy_size = (
-                    f" {original_size} "
-                )
+        if (
+            variation == 0
+            and original_size != original_size.upper()
+        ):
+            messy_size = original_size.upper()
+        else:
+            messy_size = f" {original_size} "
 
         messy_df.at[
             row_index,
@@ -1485,18 +1484,24 @@ def inject_messy_distribution_rows(distribution_df, rng):
                 // pack_size
             )
 
+            pack_label = (
+                "pack"
+                if number_of_packs == 1
+                else "packs"
+            )
+
+            messy_quantity = (
+                f"{number_of_packs} {pack_label} x "
+                f"{pack_size} units"
+            )
+
         else:
 
-            # Preserve the exact original quantity even
-            # when it does not divide evenly into a
-            # realistic standard pack size.
-            pack_size = original_quantity
-            number_of_packs = 1
-
-        messy_quantity = (
-            f"{number_of_packs} packs x "
-            f"{pack_size} units"
-        )
+            # Still create a messy quantity string without
+            # inventing an unrealistic pack size.
+            messy_quantity = (
+                f"{original_quantity} units"
+            )
 
         messy_df.at[
             row_index,
