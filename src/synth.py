@@ -1390,13 +1390,17 @@ def inject_messy_distribution_rows(distribution_df, rng):
                 rng.integers(0, 2)
             )
 
-        if (
-            variation == 0
-            and original_size != original_size.upper()
-        ):
-            messy_size = original_size.upper()
-        else:
-            messy_size = f" {original_size} "
+            if (
+                variation == 0
+                and original_size != original_size.upper()
+            ):
+                messy_size = (
+                    original_size.upper()
+                )
+            else:
+                messy_size = (
+                    f" {original_size} "
+                )
 
         messy_df.at[
             row_index,
@@ -1518,15 +1522,418 @@ def inject_messy_distribution_rows(distribution_df, rng):
 def validate_synthetic_data(
     partners,
     distribution_df,
+    messy_distribution_df,
     inventory_df,
     incoming_supply_df,
     survey_df,
 ):
     """
-    Verify that the generated data satisfies the synthetic
-    data specification before files are saved.
+    Validate that the generated synthetic datasets satisfy
+    the core requirements and planted business conditions.
+
+    Raises ValueError if a required condition is not met.
+
+    Returns a summary dictionary when validation succeeds.
     """
-    pass
+
+    validation_summary = {}
+
+    # -----------------------------------------------------
+    # 1. Partner network
+    # -----------------------------------------------------
+
+    if len(partners) != N_SITES:
+        raise ValueError(
+            f"Expected {N_SITES} partner sites, "
+            f"found {len(partners)}."
+        )
+
+    validation_summary["partner_sites"] = len(
+        partners
+    )
+
+    # -----------------------------------------------------
+    # 2. Historical coverage
+    # -----------------------------------------------------
+
+    historical_weeks = (
+        distribution_df["date"].nunique()
+    )
+
+    if historical_weeks != N_WEEKS:
+        raise ValueError(
+            f"Expected {N_WEEKS} historical weeks, "
+            f"found {historical_weeks}."
+        )
+
+    validation_summary["historical_weeks"] = (
+        historical_weeks
+    )
+
+    # -----------------------------------------------------
+    # 3. Product coverage by site
+    # -----------------------------------------------------
+
+    period_site_count = (
+        distribution_df.loc[
+            distribution_df["product"]
+            .str.startswith("period_"),
+            "site_id",
+        ]
+        .nunique()
+    )
+
+    pullup_site_count = (
+        distribution_df.loc[
+            distribution_df["product"]
+            == "pull_up",
+            "site_id",
+        ]
+        .nunique()
+    )
+
+    adult_site_count = (
+        distribution_df.loc[
+            distribution_df["product"]
+            == "adult_incontinence",
+            "site_id",
+        ]
+        .nunique()
+    )
+
+    if period_site_count != 10:
+        raise ValueError(
+            "Expected period-product activity at "
+            f"10 sites, found {period_site_count}."
+        )
+
+    if pullup_site_count != 8:
+        raise ValueError(
+            "Expected pull-up activity at "
+            f"8 sites, found {pullup_site_count}."
+        )
+
+    if adult_site_count != 3:
+        raise ValueError(
+            "Expected adult-incontinence activity at "
+            f"3 sites, found {adult_site_count}."
+        )
+
+    validation_summary[
+        "period_product_sites"
+    ] = period_site_count
+
+    validation_summary[
+        "pullup_sites"
+    ] = pullup_site_count
+
+    validation_summary[
+        "adult_incontinence_sites"
+    ] = adult_site_count
+
+    # -----------------------------------------------------
+    # 4. Diaper demand size mix
+    # -----------------------------------------------------
+
+    diaper_distribution = (
+        distribution_df.loc[
+            distribution_df["product"]
+            == "diaper"
+        ]
+    )
+
+    diaper_mix = (
+        diaper_distribution
+        .groupby("size")["quantity"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    top_two_sizes = set(
+        diaper_mix.head(2).index
+    )
+
+    bottom_two_sizes = set(
+        diaper_mix.tail(2).index
+    )
+
+    if top_two_sizes != {"4", "5"}:
+        raise ValueError(
+            "Diaper demand does not peak in "
+            "sizes 4 and 5."
+        )
+
+    if bottom_two_sizes != {"N", "7"}:
+        raise ValueError(
+            "Newborn and size 7 are not the "
+            "two lowest-volume diaper sizes."
+        )
+
+    validation_summary[
+        "top_diaper_sizes"
+    ] = sorted(top_two_sizes)
+
+    # -----------------------------------------------------
+    # 5. Mid-series onboarding
+    # -----------------------------------------------------
+
+    historical_dates = pd.date_range(
+        end=HISTORY_END_DATE,
+        periods=N_WEEKS,
+        freq="W-MON",
+    )
+
+    site_24_first_date = (
+        distribution_df.loc[
+            distribution_df["site_id"]
+            == "SITE_024",
+            "date",
+        ]
+        .min()
+    )
+
+    site_25_first_date = (
+        distribution_df.loc[
+            distribution_df["site_id"]
+            == "SITE_025",
+            "date",
+        ]
+        .min()
+    )
+
+    if site_24_first_date != historical_dates[30]:
+        raise ValueError(
+            "SITE_024 does not begin at week 30."
+        )
+
+    if site_25_first_date != historical_dates[50]:
+        raise ValueError(
+            "SITE_025 does not begin at week 50."
+        )
+
+    # -----------------------------------------------------
+    # 6. Required six-week inactivity gap
+    # -----------------------------------------------------
+
+    expected_gap_dates = set(
+        historical_dates[35:41]
+    )
+
+    site_08_dates = set(
+        distribution_df.loc[
+            distribution_df["site_id"]
+            == "SITE_008",
+            "date",
+        ]
+    )
+
+    if not expected_gap_dates.isdisjoint(
+        site_08_dates
+    ):
+        raise ValueError(
+            "SITE_008 does not contain the required "
+            "six-week inactivity gap."
+        )
+
+    # -----------------------------------------------------
+    # 7. Messy-data rate
+    # -----------------------------------------------------
+
+    comparison_columns = [
+        "product",
+        "size",
+        "quantity",
+    ]
+
+    changed_rows = (
+        distribution_df[
+            comparison_columns
+        ]
+        .astype(str)
+        .ne(
+            messy_distribution_df[
+                comparison_columns
+            ].astype(str)
+        )
+        .any(axis=1)
+        .sum()
+    )
+
+    messy_rate = (
+        changed_rows
+        / len(distribution_df)
+    )
+
+    if abs(
+        messy_rate - MESSY_ROW_RATE
+    ) >= 0.005:
+        raise ValueError(
+            "Messy-data rate is outside the "
+            "acceptable tolerance around 3%."
+        )
+
+    validation_summary[
+        "messy_row_rate"
+    ] = round(
+        messy_rate,
+        4,
+    )
+
+    # -----------------------------------------------------
+    # 8. Partner survey coverage
+    # -----------------------------------------------------
+
+    if len(survey_df) != N_SITES:
+        raise ValueError(
+            f"Expected {N_SITES} survey records, "
+            f"found {len(survey_df)}."
+        )
+
+    if set(
+        survey_df["site_name"]
+    ) != set(
+        partners["site_name"]
+    ):
+        raise ValueError(
+            "Partner survey does not cover the "
+            "complete partner network."
+        )
+
+    # -----------------------------------------------------
+    # 9. Incoming supply status coverage
+    # -----------------------------------------------------
+
+    incoming_statuses = set(
+        incoming_supply_df["status"]
+    )
+
+    if incoming_statuses != {
+        "confirmed",
+        "pending",
+    }:
+        raise ValueError(
+            "Incoming supply must contain both "
+            "confirmed and pending records."
+        )
+
+    # -----------------------------------------------------
+    # 10. Donation diaper-size skew
+    # -----------------------------------------------------
+
+    donation_sources = [
+        "Community Donations",
+        "Spring Donation Drive",
+        "Holiday Donation Drive",
+    ]
+
+    diaper_donations = (
+        incoming_supply_df.loc[
+            incoming_supply_df["source"].isin(
+                donation_sources
+            )
+            & (
+                incoming_supply_df["product"]
+                == "diaper"
+            )
+        ]
+    )
+
+    donation_mix = (
+        diaper_donations
+        .groupby("size")["quantity"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    donation_top_three = set(
+        donation_mix.head(3).index
+    )
+
+    if donation_top_three != {
+        "N",
+        "1",
+        "2",
+    }:
+        raise ValueError(
+            "Diaper donations are not skewed "
+            "toward N, 1, and 2."
+        )
+
+    validation_summary[
+        "top_donation_sizes"
+    ] = sorted(
+        donation_top_three
+    )
+
+    # -----------------------------------------------------
+    # 11. Inventory long / short conditions
+    # -----------------------------------------------------
+
+    recent_dates = sorted(
+        distribution_df["date"].unique()
+    )[-8:]
+
+    recent_diaper = (
+        distribution_df.loc[
+            distribution_df["date"].isin(
+                recent_dates
+            )
+            & (
+                distribution_df["product"]
+                == "diaper"
+            )
+        ]
+    )
+
+    weekly_diaper_demand = (
+        recent_diaper
+        .groupby("size")["quantity"]
+        .sum()
+        / len(recent_dates)
+    )
+
+    diaper_inventory = (
+        inventory_df.loc[
+            inventory_df["product"]
+            == "diaper"
+        ]
+        .groupby("size")[
+            "quantity_on_hand"
+        ]
+        .sum()
+    )
+
+    weeks_of_supply = (
+        diaper_inventory
+        / weekly_diaper_demand
+    )
+
+    for size in ["N", "1", "2"]:
+        if weeks_of_supply[size] <= 12:
+            raise ValueError(
+                f"Expected diaper size {size} "
+                "to be in a long inventory position."
+            )
+
+    for size in ["5", "6"]:
+        if weeks_of_supply[size] >= 3:
+            raise ValueError(
+                f"Expected diaper size {size} "
+                "to be in a short inventory position."
+            )
+
+    validation_summary[
+        "diaper_weeks_of_supply"
+    ] = {
+        size: round(
+            float(value),
+            2,
+        )
+        for size, value
+        in weeks_of_supply.items()
+    }
+
+    return validation_summary
 
 
 # ---------------------------------------------------------
@@ -1539,11 +1946,113 @@ def save_outputs(
     inventory_df,
     incoming_supply_df,
     survey_df,
+    output_dir=OUTPUT_DIR,
 ):
     """
-    Save generated datasets to data/sample/.
+    Save the generated synthetic datasets as CSV and XLSX
+    files.
+
+    Also creates an alternate-header distribution file for
+    ingestion and column-mapping tests.
     """
-    pass
+
+    output_dir = Path(output_dir)
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    datasets = {
+        "distribution_log_clean": distribution_df,
+        "distribution_log_messy": messy_distribution_df,
+        "current_inventory": inventory_df,
+        "incoming_supply": incoming_supply_df,
+        "partner_survey": survey_df,
+    }
+
+    saved_files = []
+
+    for file_name, dataframe in datasets.items():
+
+        csv_path = (
+            output_dir
+            / f"{file_name}.csv"
+        )
+
+        xlsx_path = (
+            output_dir
+            / f"{file_name}.xlsx"
+        )
+
+        dataframe.to_csv(
+            csv_path,
+            index=False,
+        )
+
+        dataframe.to_excel(
+            xlsx_path,
+            index=False,
+        )
+
+        saved_files.extend(
+            [
+                csv_path,
+                xlsx_path,
+            ]
+        )
+
+    # -----------------------------------------------------
+    # Alternate-header validation file
+    # -----------------------------------------------------
+
+    alternate_headers_df = (
+        distribution_df.copy(deep=True)
+    )
+
+    alternate_headers_df = (
+        alternate_headers_df.rename(
+            columns={
+                "date": "Distribution Date",
+                "site_id": "Site ID",
+                "site_name": "Partner",
+                "product": "Product Category",
+                "size": "Product Size",
+                "quantity": "Qty",
+                "households_served": "Households",
+                "children_served": "Children",
+            }
+        )
+    )
+
+    alternate_csv_path = (
+        output_dir
+        / "distribution_log_alternate_headers.csv"
+    )
+
+    alternate_xlsx_path = (
+        output_dir
+        / "distribution_log_alternate_headers.xlsx"
+    )
+
+    alternate_headers_df.to_csv(
+        alternate_csv_path,
+        index=False,
+    )
+
+    alternate_headers_df.to_excel(
+        alternate_xlsx_path,
+        index=False,
+    )
+
+    saved_files.extend(
+        [
+            alternate_csv_path,
+            alternate_xlsx_path,
+        ]
+    )
+
+    return saved_files
 
 
 # ---------------------------------------------------------
@@ -1580,12 +2089,27 @@ def main():
         rng,
     )
 
-    validate_synthetic_data(
+    validation_summary = validate_synthetic_data(
         partners,
         distribution_df,
+        messy_distribution_df,
         inventory_df,
         incoming_supply_df,
         survey_df,
+    )
+
+    print("\nSynthetic data validation passed.")
+    print(
+        f"Partners: "
+        f"{validation_summary['partner_sites']}"
+    )
+    print(
+        f"Historical weeks: "
+        f"{validation_summary['historical_weeks']}"
+    )
+    print(
+        f"Messy row rate: "
+        f"{validation_summary['messy_row_rate']:.2%}"
     )
 
     save_outputs(

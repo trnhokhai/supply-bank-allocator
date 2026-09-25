@@ -12,6 +12,8 @@ from src.synth import (
     generate_incoming_supply,
     MESSY_ROW_RATE,
     inject_messy_distribution_rows,
+    validate_synthetic_data,
+    save_outputs,
 )
 
 
@@ -884,3 +886,248 @@ def test_messy_distribution_contains_planted_issues():
     assert has_pack_quantity
     assert product_changed
     assert size_changed
+
+def test_full_synthetic_validation_passes():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            distribution,
+            rng,
+        )
+    )
+
+    summary = validate_synthetic_data(
+        partners,
+        distribution,
+        messy_distribution,
+        inventory,
+        incoming,
+        survey,
+    )
+
+    assert summary["partner_sites"] == 25
+    assert summary["historical_weeks"] == 78
+
+
+def test_validation_summary_contains_business_checks():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            distribution,
+            rng,
+        )
+    )
+
+    summary = validate_synthetic_data(
+        partners,
+        distribution,
+        messy_distribution,
+        inventory,
+        incoming,
+        survey,
+    )
+
+    assert set(
+        summary["top_diaper_sizes"]
+    ) == {"4", "5"}
+
+    assert set(
+        summary["top_donation_sizes"]
+    ) == {"N", "1", "2"}
+
+    assert (
+        summary["messy_row_rate"]
+        > 0
+    )
+
+    assert (
+        summary["diaper_weeks_of_supply"]["5"]
+        < 3
+    )
+
+    assert (
+        summary["diaper_weeks_of_supply"]["6"]
+        < 3
+    )
+
+def test_save_outputs_creates_expected_files(
+    tmp_path,
+):
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            distribution,
+            rng,
+        )
+    )
+
+    saved_files = save_outputs(
+        distribution,
+        messy_distribution,
+        inventory,
+        incoming,
+        survey,
+        output_dir=tmp_path,
+    )
+
+    expected_file_names = {
+        "distribution_log_clean.csv",
+        "distribution_log_clean.xlsx",
+        "distribution_log_messy.csv",
+        "distribution_log_messy.xlsx",
+        "current_inventory.csv",
+        "current_inventory.xlsx",
+        "incoming_supply.csv",
+        "incoming_supply.xlsx",
+        "partner_survey.csv",
+        "partner_survey.xlsx",
+        "distribution_log_alternate_headers.csv",
+        "distribution_log_alternate_headers.xlsx",
+    }
+
+    actual_file_names = {
+        path.name
+        for path in saved_files
+    }
+
+    assert actual_file_names == (
+        expected_file_names
+    )
+
+    assert all(
+        path.exists()
+        for path in saved_files
+    )
+
+
+def test_alternate_header_file_has_expected_headers(
+    tmp_path,
+):
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    survey = generate_partner_survey(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    incoming = generate_incoming_supply(
+        distribution,
+        rng,
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            distribution,
+            rng,
+        )
+    )
+
+    save_outputs(
+        distribution,
+        messy_distribution,
+        inventory,
+        incoming,
+        survey,
+        output_dir=tmp_path,
+    )
+
+    alternate_file = pd.read_csv(
+        tmp_path
+        / "distribution_log_alternate_headers.csv"
+    )
+
+    expected_columns = [
+        "Distribution Date",
+        "Site ID",
+        "Partner",
+        "Product Category",
+        "Product Size",
+        "Qty",
+        "Households",
+        "Children",
+    ]
+
+    assert list(
+        alternate_file.columns
+    ) == expected_columns

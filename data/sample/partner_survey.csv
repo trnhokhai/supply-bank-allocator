@@ -1,0 +1,26 @@
+site_name,zip_code,agency_type,families_served_per_month,children_under_4_per_month,menstruating_clients_per_month,poverty_share_band,priority_population_flags,storage_capacity_cases,distribution_frequency,recent_stockout_sizes,preferred_contact,languages_spoken
+Partner Site 01,60601,school,180,41,198,50_to_75_percent,students,175,biweekly,6,site01@example.org,English;Spanish
+Partner Site 02,60602,school,135,36,133,over_75_percent,students,99,biweekly,5,site02@example.org,English
+Partner Site 03,60603,health_center,93,44,82,25_to_50_percent,none,114,biweekly,5,site03@example.org,English;Spanish;Vietnamese
+Partner Site 04,60604,health_center,76,36,58,50_to_75_percent,none,32,biweekly,5,site04@example.org,English;Spanish
+Partner Site 05,60605,shelter,114,65,77,over_75_percent,emergency_shelter,134,weekly,4;5,site05@example.org,English;Arabic
+Partner Site 06,60606,shelter,118,66,93,over_75_percent,emergency_shelter,121,weekly,none,site06@example.org,English
+Partner Site 07,60607,school,151,39,141,50_to_75_percent,students,168,monthly,none,site07@example.org,English
+Partner Site 08,60608,other,197,86,124,under_25_percent,refugee_or_newly_arrived_families,226,weekly,6,site08@example.org,English;Spanish
+Partner Site 09,60609,shelter,87,48,66,over_75_percent,emergency_shelter,55,weekly,6;5,site09@example.org,English
+Partner Site 10,60610,shelter,110,59,75,over_75_percent,emergency_shelter;domestic_violence_program,89,biweekly,5,site10@example.org,English;Arabic
+Partner Site 11,60611,pantry,34,15,21,50_to_75_percent,refugee_or_newly_arrived_families,34,biweekly,none,site11@example.org,English;Spanish
+Partner Site 12,60612,pantry,147,72,84,50_to_75_percent,refugee_or_newly_arrived_families,71,biweekly,5;4,site12@example.org,English;Spanish
+Partner Site 13,60613,health_center,221,100,174,25_to_50_percent,none,296,monthly,5,site13@example.org,English;Spanish
+Partner Site 14,60614,school,87,22,85,under_25_percent,students,66,biweekly,5;6,site14@example.org,English;Spanish
+Partner Site 15,60615,wic_clinic,102,89,58,50_to_75_percent,none,109,weekly,5,site15@example.org,English
+Partner Site 16,60616,pantry,47,22,29,25_to_50_percent,refugee_or_newly_arrived_families,47,weekly,5,site16@example.org,English;Spanish;Arabic
+Partner Site 17,60617,wic_clinic,74,62,39,over_75_percent,teen_parents,129,monthly,4,site17@example.org,English
+Partner Site 18,60618,wic_clinic,74,63,38,over_75_percent,teen_parents,64,weekly,4;6,site18@example.org,English
+Partner Site 19,60619,faith_community,125,40,76,50_to_75_percent,none,118,biweekly,5;4,site19@example.org,English
+Partner Site 20,60620,pantry,237,97,152,over_75_percent,none,235,weekly,5,site20@example.org,English;Spanish;Arabic;French
+Partner Site 21,60621,pantry,60,24,40,over_75_percent,refugee_or_newly_arrived_families,38,weekly,none,site21@example.org,English;Spanish
+Partner Site 22,60622,faith_community,160,60,92,50_to_75_percent,none,235,monthly,6,site22@example.org,English;Arabic;Vietnamese
+Partner Site 23,60623,pantry,121,53,68,50_to_75_percent,refugee_or_newly_arrived_families,117,monthly,6;4,site23@example.org,English;Spanish
+Partner Site 24,60624,wic_clinic,47,42,24,over_75_percent,none,69,biweekly,6,site24@example.org,English;Spanish
+Partner Site 25,60625,shelter,58,30,42,over_75_percent,emergency_shelter,39,weekly,6,site25@example.org,English
