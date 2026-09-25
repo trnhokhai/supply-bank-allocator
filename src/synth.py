@@ -942,13 +942,100 @@ def generate_partner_survey(partners, rng):
 
 def generate_current_inventory(distribution_df, rng):
     """
-    Generate the current inventory snapshot.
+    Generate the current network inventory snapshot from
+    recent simulated demand.
 
-    Inventory will intentionally create:
-    - long positions in N, 1, and 2
-    - short positions in 5 and 6
+    Diaper inventory is intentionally designed to contain
+    long and short size positions for later alert testing.
     """
-    pass
+
+    recent_dates = sorted(
+        distribution_df["date"].unique()
+    )[-8:]
+
+    recent_distribution = distribution_df.loc[
+        distribution_df["date"].isin(recent_dates)
+    ]
+
+    average_weekly_demand = (
+        recent_distribution
+        .groupby(["product", "size"])["quantity"]
+        .sum()
+        .div(len(recent_dates))
+        .reset_index(name="avg_weekly_demand")
+    )
+
+    diaper_target_wos = {
+        "N": 16.0,
+        "1": 15.0,
+        "2": 13.0,
+        "3": 7.0,
+        "4": 4.0,
+        "5": 1.8,
+        "6": 2.2,
+        "7": 5.0,
+    }
+
+    other_product_target_wos = {
+        "wipes": 6.0,
+        "pull_up": 5.0,
+        "period_pad": 5.0,
+        "period_tampon": 5.0,
+        "period_liner": 6.0,
+        "period_cup": 8.0,
+        "adult_incontinence": 5.0,
+    }
+
+    rows = []
+
+    for _, record in average_weekly_demand.iterrows():
+
+        product = record["product"]
+        size = record["size"]
+        weekly_demand = float(
+            record["avg_weekly_demand"]
+        )
+
+        if product == "diaper":
+            target_wos = diaper_target_wos[size]
+        else:
+            target_wos = other_product_target_wos[
+                product
+            ]
+
+        # Small deterministic variation keeps inventory
+        # from looking artificially exact.
+        inventory_noise = rng.uniform(
+            0.97,
+            1.03,
+        )
+
+        quantity_on_hand = int(
+            round(
+                weekly_demand
+                * target_wos
+                * inventory_noise
+            )
+        )
+
+        quantity_on_hand = max(
+            quantity_on_hand,
+            0,
+        )
+
+        rows.append(
+            {
+                "as_of_date": HISTORY_END_DATE,
+                "product": product,
+                "size": size,
+                "quantity_on_hand": quantity_on_hand,
+                "location": "Main Warehouse",
+            }
+        )
+
+    inventory_df = pd.DataFrame(rows)
+
+    return inventory_df
 
 
 # ---------------------------------------------------------

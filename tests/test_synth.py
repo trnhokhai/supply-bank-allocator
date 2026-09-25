@@ -8,6 +8,7 @@ from src.synth import (
     generate_distribution_history,
     generate_partner_master,
     generate_partner_survey,
+    generate_current_inventory,
 )
 
 
@@ -443,3 +444,129 @@ def test_partner_survey_numeric_values():
         .str.fullmatch(r"\d{5}")
         .all()
     )
+
+def test_current_inventory_structure():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    expected_columns = [
+        "as_of_date",
+        "product",
+        "size",
+        "quantity_on_hand",
+        "location",
+    ]
+
+    assert list(inventory.columns) == expected_columns
+
+    assert (
+        inventory["as_of_date"] == HISTORY_END_DATE
+    ).all()
+
+    assert (
+        inventory["quantity_on_hand"] >= 0
+    ).all()
+
+
+def test_current_inventory_covers_demanded_products():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    demand_combinations = set(
+        map(
+            tuple,
+            distribution[
+                ["product", "size"]
+            ]
+            .drop_duplicates()
+            .to_numpy(),
+        )
+    )
+
+    inventory_combinations = set(
+        map(
+            tuple,
+            inventory[
+                ["product", "size"]
+            ]
+            .drop_duplicates()
+            .to_numpy(),
+        )
+    )
+
+    assert demand_combinations.issubset(
+        inventory_combinations
+    )
+
+
+def test_diaper_inventory_has_long_and_short_sizes():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    inventory = generate_current_inventory(
+        distribution,
+        rng,
+    )
+
+    recent_dates = sorted(
+        distribution["date"].unique()
+    )[-8:]
+
+    recent_diaper = distribution.loc[
+        distribution["date"].isin(recent_dates)
+        & (distribution["product"] == "diaper")
+    ]
+
+    weekly_demand = (
+        recent_diaper
+        .groupby("size")["quantity"]
+        .sum()
+        / len(recent_dates)
+    )
+
+    diaper_inventory = (
+        inventory.loc[
+            inventory["product"] == "diaper"
+        ]
+        .groupby("size")["quantity_on_hand"]
+        .sum()
+    )
+
+    weeks_of_supply = (
+        diaper_inventory / weekly_demand
+    )
+
+    assert weeks_of_supply["N"] > 12
+    assert weeks_of_supply["1"] > 12
+    assert weeks_of_supply["2"] > 12
+
+    assert weeks_of_supply["5"] < 3
+    assert weeks_of_supply["6"] < 3
