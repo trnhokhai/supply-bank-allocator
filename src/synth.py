@@ -1315,16 +1315,195 @@ def generate_incoming_supply(distribution_df, rng):
 
 def inject_messy_distribution_rows(distribution_df, rng):
     """
-    Create a validation version of the distribution log
-    with approximately 3% planted data-quality issues.
+    Create a validation copy of the distribution log with
+    approximately 3% deliberately planted data-quality issues.
 
-    Examples:
-    - SIZE5
-    - size 5
-    - trailing whitespace
-    - pack quantities
+    The clean source dataframe is never modified.
+
+    Planted issues include:
+    - non-standard size labels
+    - inconsistent product capitalization / whitespace
+    - pack-based quantity representations
     """
-    pass
+
+    messy_df = distribution_df.copy(deep=True)
+
+    total_rows = len(messy_df)
+
+    if total_rows == 0:
+        return messy_df
+
+    n_messy_rows = max(
+        1,
+        int(round(total_rows * MESSY_ROW_RATE)),
+    )
+
+    messy_indices = rng.choice(
+        messy_df.index.to_numpy(),
+        size=n_messy_rows,
+        replace=False,
+    )
+
+    # Split the selected rows across three issue types.
+    issue_groups = np.array_split(
+        messy_indices,
+        3,
+    )
+
+    size_indices = issue_groups[0]
+    product_indices = issue_groups[1]
+    quantity_indices = issue_groups[2]
+
+    # Quantity must temporarily support both numeric values
+    # and deliberately messy string representations.
+    messy_df["quantity"] = (
+        messy_df["quantity"].astype(object)
+    )
+
+    # -----------------------------------------------------
+    # 1. Non-standard size labels
+    # -----------------------------------------------------
+
+    for row_index in size_indices:
+
+        original_size = str(
+            messy_df.at[row_index, "size"]
+        )
+
+        product = messy_df.at[
+            row_index,
+            "product",
+        ]
+
+        if product == "diaper":
+
+            if original_size == "N":
+                messy_size = " newborn "
+            else:
+                messy_size = (
+                    f"SIZE{original_size}"
+                )
+
+        else:
+
+            variation = int(
+                rng.integers(0, 2)
+            )
+
+            if variation == 0:
+                messy_size = (
+                    original_size.upper()
+                )
+            else:
+                messy_size = (
+                    f" {original_size} "
+                )
+
+        messy_df.at[
+            row_index,
+            "size",
+        ] = messy_size
+
+    # -----------------------------------------------------
+    # 2. Product capitalization / whitespace
+    # -----------------------------------------------------
+
+    for row_index in product_indices:
+
+        original_product = str(
+            messy_df.at[
+                row_index,
+                "product",
+            ]
+        )
+
+        variation = int(
+            rng.integers(0, 3)
+        )
+
+        if variation == 0:
+            messy_product = (
+                original_product.upper()
+            )
+
+        elif variation == 1:
+            messy_product = (
+                original_product.title()
+            )
+
+        else:
+            messy_product = (
+                f" {original_product} "
+            )
+
+        messy_df.at[
+            row_index,
+            "product",
+        ] = messy_product
+
+    # -----------------------------------------------------
+    # 3. Pack-based quantity representations
+    # -----------------------------------------------------
+
+    candidate_pack_sizes = [
+        10,
+        20,
+        25,
+        50,
+    ]
+
+    for row_index in quantity_indices:
+
+        original_quantity = int(
+            messy_df.at[
+                row_index,
+                "quantity",
+            ]
+        )
+
+        valid_pack_sizes = [
+            pack_size
+            for pack_size
+            in candidate_pack_sizes
+            if (
+                original_quantity
+                % pack_size
+                == 0
+            )
+        ]
+
+        if valid_pack_sizes:
+
+            pack_size = int(
+                rng.choice(
+                    valid_pack_sizes
+                )
+            )
+
+            number_of_packs = (
+                original_quantity
+                // pack_size
+            )
+
+        else:
+
+            # Preserve the exact original quantity even
+            # when it does not divide evenly into a
+            # realistic standard pack size.
+            pack_size = original_quantity
+            number_of_packs = 1
+
+        messy_quantity = (
+            f"{number_of_packs} packs x "
+            f"{pack_size} units"
+        )
+
+        messy_df.at[
+            row_index,
+            "quantity",
+        ] = messy_quantity
+
+    return messy_df
 
 
 # ---------------------------------------------------------

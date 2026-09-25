@@ -10,6 +10,8 @@ from src.synth import (
     generate_partner_survey,
     generate_current_inventory,
     generate_incoming_supply,
+    MESSY_ROW_RATE,
+    inject_messy_distribution_rows,
 )
 
 
@@ -725,3 +727,160 @@ def test_donation_seasonality_and_drives():
     )
 
     assert summer_average < non_summer_average
+
+def test_messy_distribution_preserves_row_count():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    clean_distribution = (
+        generate_distribution_history(
+            partners,
+            rng,
+        )
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            clean_distribution,
+            rng,
+        )
+    )
+
+    assert len(messy_distribution) == len(
+        clean_distribution
+    )
+
+
+def test_messy_distribution_does_not_mutate_clean_data():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    clean_distribution = (
+        generate_distribution_history(
+            partners,
+            rng,
+        )
+    )
+
+    original_distribution = (
+        clean_distribution.copy(deep=True)
+    )
+
+    inject_messy_distribution_rows(
+        clean_distribution,
+        rng,
+    )
+
+    pd.testing.assert_frame_equal(
+        clean_distribution,
+        original_distribution,
+    )
+
+
+def test_messy_distribution_rate_is_about_three_percent():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    clean_distribution = (
+        generate_distribution_history(
+            partners,
+            rng,
+        )
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            clean_distribution,
+            rng,
+        )
+    )
+
+    comparison_columns = [
+        "product",
+        "size",
+        "quantity",
+    ]
+
+    changed_rows = (
+        clean_distribution[
+            comparison_columns
+        ]
+        .astype(str)
+        .ne(
+            messy_distribution[
+                comparison_columns
+            ].astype(str)
+        )
+        .any(axis=1)
+        .sum()
+    )
+
+    actual_rate = (
+        changed_rows
+        / len(clean_distribution)
+    )
+
+    assert abs(
+        actual_rate - MESSY_ROW_RATE
+    ) < 0.005
+
+
+def test_messy_distribution_contains_planted_issues():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+
+    clean_distribution = (
+        generate_distribution_history(
+            partners,
+            rng,
+        )
+    )
+
+    messy_distribution = (
+        inject_messy_distribution_rows(
+            clean_distribution,
+            rng,
+        )
+    )
+
+    quantity_strings = (
+        messy_distribution["quantity"]
+        .astype(str)
+    )
+
+    has_pack_quantity = (
+        quantity_strings
+        .str.contains(
+            "packs x",
+            regex=False,
+        )
+        .any()
+    )
+
+    product_changed = (
+        clean_distribution["product"]
+        .astype(str)
+        .ne(
+            messy_distribution["product"]
+            .astype(str)
+        )
+        .any()
+    )
+
+    size_changed = (
+        clean_distribution["size"]
+        .astype(str)
+        .ne(
+            messy_distribution["size"]
+            .astype(str)
+        )
+        .any()
+    )
+
+    assert has_pack_quantity
+    assert product_changed
+    assert size_changed
