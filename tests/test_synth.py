@@ -129,8 +129,12 @@ def test_diaper_size_mix_pattern():
         rng,
     )
 
+    diaper_distribution = distribution.loc[
+        distribution["product"] == "diaper"
+    ]
+
     diaper_mix = (
-        distribution
+        diaper_distribution
         .groupby("size")["quantity"]
         .sum()
         .sort_values(ascending=False)
@@ -197,3 +201,144 @@ def test_site_08_has_six_week_gap():
     )
 
     assert gap_dates.isdisjoint(site_08_dates)
+
+def test_distribution_contains_expected_products():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    expected_products = {
+        "diaper",
+        "wipes",
+        "pull_up",
+        "period_pad",
+        "period_tampon",
+        "period_liner",
+        "period_cup",
+        "adult_incontinence",
+    }
+
+    assert expected_products.issubset(
+        set(distribution["product"].unique())
+    )
+
+
+def test_distribution_product_site_counts():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    pullup_sites = distribution.loc[
+        distribution["product"] == "pull_up",
+        "site_id",
+    ].nunique()
+
+    period_sites = distribution.loc[
+        distribution["product"].str.startswith("period_"),
+        "site_id",
+    ].nunique()
+
+    adult_sites = distribution.loc[
+        distribution["product"] == "adult_incontinence",
+        "site_id",
+    ].nunique()
+
+    assert pullup_sites == 8
+    assert period_sites == 10
+    assert adult_sites == 3
+
+
+def test_product_size_vocabularies():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    pullup_sizes = set(
+        distribution.loc[
+            distribution["product"] == "pull_up",
+            "size",
+        ]
+    )
+
+    adult_sizes = set(
+        distribution.loc[
+            distribution["product"] == "adult_incontinence",
+            "size",
+        ]
+    )
+
+    wipe_sizes = set(
+        distribution.loc[
+            distribution["product"] == "wipes",
+            "size",
+        ]
+    )
+
+    assert pullup_sizes.issubset(
+        {"2T-3T", "3T-4T", "4T-5T"}
+    )
+
+    assert adult_sizes.issubset(
+        {"S", "M", "L", "XL"}
+    )
+
+    assert wipe_sizes == {"one_size"}
+
+
+def test_period_cups_are_intermittent():
+    rng = np.random.default_rng(SEED)
+
+    partners = generate_partner_master(rng)
+    distribution = generate_distribution_history(
+        partners,
+        rng,
+    )
+
+    period_sites = partners.loc[
+        partners["has_period_products"],
+        "site_id",
+    ]
+
+    cup_distribution = distribution.loc[
+        distribution["product"] == "period_cup"
+    ]
+
+    total_possible_site_weeks = 0
+
+    for site_id in period_sites:
+
+        onboarding_week = int(
+            partners.loc[
+                partners["site_id"] == site_id,
+                "onboarding_week",
+            ].iloc[0]
+        )
+
+        active_weeks = N_WEEKS - onboarding_week
+
+        if site_id == "SITE_008":
+            active_weeks -= 6
+
+        total_possible_site_weeks += active_weeks
+
+    actual_cup_site_weeks = (
+        cup_distribution[
+            ["site_id", "date"]
+        ]
+        .drop_duplicates()
+        .shape[0]
+    )
+
+    assert actual_cup_site_weeks < total_possible_site_weeks

@@ -62,6 +62,9 @@ Historical distribution records used to estimate future demand by partner site, 
 **Liners and cups**
 - `one_size`
 
+**Wipes**
+- `one_size`
+
 ### Notes
 
 - `quantity` must represent individual units rather than packages or cases.

@@ -28,6 +28,50 @@ BASE_DIAPER_MIX = {
     "7": 0.03,
 }
 
+PULLUP_SIZES = ["2T-3T", "3T-4T", "4T-5T"]
+
+PULLUP_MIX = {
+    "2T-3T": 0.30,
+    "3T-4T": 0.40,
+    "4T-5T": 0.30,
+}
+
+ADULT_INCONTINENCE_SIZES = ["S", "M", "L", "XL"]
+
+ADULT_INCONTINENCE_MIX = {
+    "S": 0.15,
+    "M": 0.35,
+    "L": 0.35,
+    "XL": 0.15,
+}
+
+PERIOD_PRODUCT_CONFIG = {
+    "period_pad": {
+        "sizes": ["regular", "super", "overnight"],
+        "mix": [0.50, 0.30, 0.20],
+        "demand_share": 0.12,
+        "active_probability": 0.95,
+    },
+    "period_tampon": {
+        "sizes": ["regular", "super", "super_plus"],
+        "mix": [0.55, 0.30, 0.15],
+        "demand_share": 0.08,
+        "active_probability": 0.90,
+    },
+    "period_liner": {
+        "sizes": ["one_size"],
+        "mix": [1.0],
+        "demand_share": 0.04,
+        "active_probability": 0.80,
+    },
+    "period_cup": {
+        "sizes": ["one_size"],
+        "mix": [1.0],
+        "demand_share": 0.005,
+        "active_probability": 0.30,
+    },
+}
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "data" / "sample"
 
@@ -276,9 +320,67 @@ def get_diaper_size_mix(agency_type):
 # 2. Historical distributions
 # ---------------------------------------------------------
 
+def generate_product_size_quantities(
+    expected_quantity,
+    sizes,
+    mix,
+    rng,
+    active_probability=1.0,
+    noise_rate=0.15,
+):
+    """
+    Generate total weekly demand for a product and split it
+    across the product's sizes or variants.
+
+    Returns a list of (size, quantity) pairs.
+    """
+
+    if rng.random() > active_probability:
+        return []
+
+    expected_quantity = max(float(expected_quantity), 0.0)
+
+    if expected_quantity == 0:
+        return []
+
+    total_quantity = int(
+        round(
+            rng.normal(
+                loc=expected_quantity,
+                scale=max(expected_quantity * noise_rate, 1.0),
+            )
+        )
+    )
+
+    total_quantity = max(total_quantity, 0)
+
+    if total_quantity == 0:
+        return []
+
+    probabilities = np.array(
+        mix,
+        dtype=float,
+    )
+
+    probabilities = probabilities / probabilities.sum()
+
+    size_quantities = rng.multinomial(
+        total_quantity,
+        probabilities,
+    )
+
+    return [
+        (size, int(quantity))
+        for size, quantity in zip(
+            sizes,
+            size_quantities,
+        )
+        if quantity > 0
+    ]
+
 def generate_distribution_history(partners, rng):
     """
-    Generate clean weekly diaper distribution history.
+    Generate clean weekly multi-product distribution history.
 
     The history includes:
     - 78 weeks
@@ -359,6 +461,10 @@ def generate_distribution_history(partners, rng):
                 size_mix,
             )
 
+                        # -------------------------------------------------
+            # Diapers
+            # -------------------------------------------------
+
             for size, quantity in zip(
                 DIAPER_SIZES,
                 size_quantities,
@@ -399,6 +505,133 @@ def generate_distribution_history(partners, rng):
                         "children_served": children_served,
                     }
                 )
+                
+            # -------------------------------------------------
+            # Wipes
+            # -------------------------------------------------
+
+            wipe_rows = generate_product_size_quantities(
+                expected_quantity=expected_weekly_demand * 0.50,
+                sizes=["one_size"],
+                mix=[1.0],
+                rng=rng,
+                active_probability=0.95,
+                noise_rate=0.15,
+            )
+
+            for size, quantity in wipe_rows:
+                rows.append(
+                    {
+                        "date": date,
+                        "site_id": site_id,
+                        "site_name": partner["site_name"],
+                        "product": "wipes",
+                        "size": size,
+                        "quantity": quantity,
+                        "households_served": None,
+                        "children_served": None,
+                    }
+                )
+
+            # -------------------------------------------------
+            # Pull-ups
+            # -------------------------------------------------
+
+            if partner["has_pullups"]:
+
+                pullup_rows = generate_product_size_quantities(
+                    expected_quantity=expected_weekly_demand * 0.20,
+                    sizes=PULLUP_SIZES,
+                    mix=[
+                        PULLUP_MIX[size]
+                        for size in PULLUP_SIZES
+                    ],
+                    rng=rng,
+                    active_probability=0.90,
+                    noise_rate=0.18,
+                )
+
+                for size, quantity in pullup_rows:
+                    rows.append(
+                        {
+                            "date": date,
+                            "site_id": site_id,
+                            "site_name": partner["site_name"],
+                            "product": "pull_up",
+                            "size": size,
+                            "quantity": quantity,
+                            "households_served": None,
+                            "children_served": None,
+                        }
+                    )
+
+            # -------------------------------------------------
+            # Period products
+            # -------------------------------------------------
+
+            if partner["has_period_products"]:
+
+                for product, config in PERIOD_PRODUCT_CONFIG.items():
+
+                    period_rows = generate_product_size_quantities(
+                        expected_quantity=(
+                            expected_weekly_demand
+                            * config["demand_share"]
+                        ),
+                        sizes=config["sizes"],
+                        mix=config["mix"],
+                        rng=rng,
+                        active_probability=(
+                            config["active_probability"]
+                        ),
+                        noise_rate=0.20,
+                    )
+
+                    for size, quantity in period_rows:
+                        rows.append(
+                            {
+                                "date": date,
+                                "site_id": site_id,
+                                "site_name": partner["site_name"],
+                                "product": product,
+                                "size": size,
+                                "quantity": quantity,
+                                "households_served": None,
+                                "children_served": None,
+                            }
+                        )
+
+            # -------------------------------------------------
+            # Adult incontinence products
+            # -------------------------------------------------
+
+            if partner["has_adult_incontinence"]:
+
+                adult_rows = generate_product_size_quantities(
+                    expected_quantity=expected_weekly_demand * 0.12,
+                    sizes=ADULT_INCONTINENCE_SIZES,
+                    mix=[
+                        ADULT_INCONTINENCE_MIX[size]
+                        for size in ADULT_INCONTINENCE_SIZES
+                    ],
+                    rng=rng,
+                    active_probability=0.85,
+                    noise_rate=0.20,
+                )
+
+                for size, quantity in adult_rows:
+                    rows.append(
+                        {
+                            "date": date,
+                            "site_id": site_id,
+                            "site_name": partner["site_name"],
+                            "product": "adult_incontinence",
+                            "size": size,
+                            "quantity": quantity,
+                            "households_served": None,
+                            "children_served": None,
+                        }
+                    )
 
     distribution_df = pd.DataFrame(rows)
 
