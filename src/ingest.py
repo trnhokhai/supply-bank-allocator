@@ -1,4 +1,5 @@
 import re
+from difflib import SequenceMatcher
 from numbers import Integral, Real
 
 
@@ -8,6 +9,428 @@ class QuantityParseError(ValueError):
 class NormalizationError(ValueError):
     """Raised when a product or size cannot be safely normalized."""
 
+class HeaderMappingError(ValueError):
+    """Raised when header mapping cannot be configured safely."""
+
+
+CANONICAL_COLUMNS = {
+    "distribution_log": [
+        "date",
+        "site_id",
+        "site_name",
+        "product",
+        "size",
+        "quantity",
+        "households_served",
+        "children_served",
+    ],
+    "current_inventory": [
+        "as_of_date",
+        "product",
+        "size",
+        "quantity_on_hand",
+        "location",
+    ],
+    "incoming_supply": [
+        "expected_date",
+        "source",
+        "product",
+        "size",
+        "quantity",
+        "status",
+    ],
+    "partner_survey": [
+        "site_name",
+        "zip_code",
+        "agency_type",
+        "families_served_per_month",
+        "children_under_4_per_month",
+        "menstruating_clients_per_month",
+        "poverty_share_band",
+        "priority_population_flags",
+        "storage_capacity_cases",
+        "distribution_frequency",
+        "recent_stockout_sizes",
+        "preferred_contact",
+        "languages_spoken",
+    ],
+}
+
+
+HEADER_ALIASES = {
+    "distribution_log": {
+        "date": {
+            "distribution date",
+            "distribution_date",
+            "dist date",
+        },
+        "site_id": {
+            "site id",
+            "partner id",
+            "agency id",
+        },
+        "site_name": {
+            "site name",
+            "partner",
+            "partner name",
+            "agency",
+            "agency name",
+        },
+        "product": {
+            "product category",
+            "product type",
+            "item",
+        },
+        "size": {
+            "product size",
+            "product variant",
+            "variant",
+        },
+        "quantity": {
+            "qty",
+            "units",
+            "units distributed",
+            "distributed quantity",
+        },
+        "households_served": {
+            "households",
+            "households served",
+        },
+        "children_served": {
+            "children",
+            "children served",
+        },
+    },
+    "current_inventory": {
+        "as_of_date": {
+            "as of date",
+            "inventory date",
+            "count date",
+            "snapshot date",
+        },
+        "product": {
+            "product category",
+            "product type",
+            "item",
+        },
+        "size": {
+            "product size",
+            "variant",
+        },
+        "quantity_on_hand": {
+            "quantity on hand",
+            "qty on hand",
+            "on hand",
+            "inventory quantity",
+        },
+        "location": {
+            "warehouse",
+            "storage location",
+        },
+    },
+    "incoming_supply": {
+        "expected_date": {
+            "expected date",
+            "arrival date",
+            "expected arrival",
+        },
+        "source": {
+            "donor",
+            "vendor",
+            "supply source",
+        },
+        "product": {
+            "product category",
+            "product type",
+            "item",
+        },
+        "size": {
+            "product size",
+            "variant",
+        },
+        "quantity": {
+            "qty",
+            "units",
+            "expected quantity",
+        },
+        "status": {
+            "supply status",
+        },
+    },
+    "partner_survey": {
+        "site_name": {
+            "site name",
+            "partner",
+            "partner name",
+            "partner agency name",
+            "agency name",
+        },
+        "zip_code": {
+            "zip",
+            "zip code",
+            "postal code",
+        },
+        "agency_type": {
+            "agency type",
+            "organization type",
+            "partner type",
+        },
+        "families_served_per_month": {
+            "families served per month",
+            "monthly families served",
+        },
+        "children_under_4_per_month": {
+            "children under 4 per month",
+            "children under four per month",
+        },
+        "menstruating_clients_per_month": {
+            "menstruating clients per month",
+        },
+        "poverty_share_band": {
+            "poverty share band",
+            "poverty band",
+        },
+        "priority_population_flags": {
+            "priority population flags",
+            "priority populations",
+        },
+        "storage_capacity_cases": {
+            "storage capacity cases",
+            "storage capacity",
+        },
+        "distribution_frequency": {
+            "distribution frequency",
+        },
+        "recent_stockout_sizes": {
+            "recent stockout sizes",
+            "stockout sizes",
+        },
+        "preferred_contact": {
+            "preferred contact",
+            "contact",
+        },
+        "languages_spoken": {
+            "languages spoken",
+            "languages",
+        },
+    },
+}
+
+def _normalize_header_name(value):
+    """
+    Convert a raw header into a comparable text token.
+
+    This function is used only for matching header names.
+    It does not rename dataframe columns by itself.
+    """
+
+    text = str(value).strip().lower()
+
+    text = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        text,
+    )
+
+    return " ".join(text.split())
+
+
+def suggest_header_mapping(
+    headers,
+    dataset_type,
+    fuzzy_cutoff=0.78,
+):
+    """
+    Suggest canonical column mappings for uploaded headers.
+
+    Matching order:
+    1. canonical or known alias match;
+    2. fuzzy suggestion for minor spelling differences;
+    3. leave unresolved headers unmapped.
+
+    A canonical target is suggested at most once.
+    """
+
+    if dataset_type not in CANONICAL_COLUMNS:
+        raise HeaderMappingError(
+            f"Unknown dataset type: {dataset_type!r}."
+        )
+
+    canonical_columns = CANONICAL_COLUMNS[
+        dataset_type
+    ]
+
+    aliases = HEADER_ALIASES.get(
+        dataset_type,
+        {}
+    )
+
+    candidate_names = {}
+
+    for canonical_column in canonical_columns:
+        names = {
+            canonical_column,
+            canonical_column.replace("_", " "),
+        }
+
+        names.update(
+            aliases.get(
+                canonical_column,
+                set(),
+            )
+        )
+
+        candidate_names[canonical_column] = {
+            _normalize_header_name(name)
+            for name in names
+        }
+
+    mapping = {}
+    used_targets = set()
+    unresolved_headers = []
+
+    # -----------------------------------------------------
+    # Pass 1: exact canonical / alias matching
+    # -----------------------------------------------------
+
+    for raw_header in headers:
+        normalized_header = _normalize_header_name(
+            raw_header
+        )
+
+        matched_target = None
+
+        for canonical_column, names in (
+            candidate_names.items()
+        ):
+            if normalized_header in names:
+                matched_target = canonical_column
+                break
+
+        if (
+            matched_target is not None
+            and matched_target not in used_targets
+        ):
+            mapping[raw_header] = matched_target
+            used_targets.add(matched_target)
+        else:
+            mapping[raw_header] = None
+            unresolved_headers.append(raw_header)
+
+    # -----------------------------------------------------
+    # Pass 2: fuzzy suggestions for unresolved headers
+    # -----------------------------------------------------
+
+    for raw_header in unresolved_headers:
+        normalized_header = _normalize_header_name(
+            raw_header
+        )
+
+        best_target = None
+        best_score = 0.0
+
+        for canonical_column, names in (
+            candidate_names.items()
+        ):
+            if canonical_column in used_targets:
+                continue
+
+            score = max(
+                SequenceMatcher(
+                    None,
+                    normalized_header,
+                    candidate_name,
+                ).ratio()
+                for candidate_name in names
+            )
+
+            if score > best_score:
+                best_score = score
+                best_target = canonical_column
+
+        if (
+            best_target is not None
+            and best_score >= fuzzy_cutoff
+        ):
+            mapping[raw_header] = best_target
+            used_targets.add(best_target)
+
+    return mapping
+
+def apply_header_mapping(
+    dataframe,
+    mapping,
+    dataset_type,
+):
+    """
+    Apply a reviewed header mapping to a dataframe.
+
+    Mapped columns are renamed to canonical names.
+    Unmapped columns are preserved so that user data is not
+    silently discarded.
+
+    Duplicate or invalid canonical targets are rejected.
+    """
+
+    if dataset_type not in CANONICAL_COLUMNS:
+        raise HeaderMappingError(
+            f"Unknown dataset type: {dataset_type!r}."
+        )
+
+    dataframe_columns = set(dataframe.columns)
+
+    unknown_source_columns = [
+        source
+        for source in mapping
+        if source not in dataframe_columns
+    ]
+
+    if unknown_source_columns:
+        raise HeaderMappingError(
+            "Header mapping contains columns that are not "
+            f"present in the uploaded file: "
+            f"{unknown_source_columns}."
+        )
+
+    allowed_targets = set(
+        CANONICAL_COLUMNS[dataset_type]
+    )
+
+    mapped_targets = [
+        target
+        for target in mapping.values()
+        if target is not None
+    ]
+
+    invalid_targets = [
+        target
+        for target in mapped_targets
+        if target not in allowed_targets
+    ]
+
+    if invalid_targets:
+        raise HeaderMappingError(
+            "Header mapping contains invalid canonical "
+            f"columns: {invalid_targets}."
+        )
+
+    if len(mapped_targets) != len(
+        set(mapped_targets)
+    ):
+        raise HeaderMappingError(
+            "Multiple uploaded columns cannot map to the "
+            "same canonical column."
+        )
+
+    rename_map = {
+        source: target
+        for source, target in mapping.items()
+        if target is not None
+    }
+
+    return dataframe.rename(
+        columns=rename_map
+    ).copy()
 
 CANONICAL_PRODUCTS = {
     "diaper",

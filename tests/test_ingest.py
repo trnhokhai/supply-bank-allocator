@@ -7,11 +7,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SAMPLE_DIR = PROJECT_ROOT / "data" / "sample"
 
 from src.ingest import (
+    HeaderMappingError,
     NormalizationError,
     QuantityParseError,
+    apply_header_mapping,
     normalize_product,
     normalize_size,
     parse_quantity_to_units,
+    suggest_header_mapping,
 )
 
 
@@ -163,3 +166,193 @@ def test_messy_sample_products_and_sizes_match_clean_ground_truth():
         clean_df["size"].astype(str).reset_index(drop=True),
         check_names=False,
     )
+
+def test_exact_canonical_distribution_headers_map_to_themselves():
+    headers = [
+        "date",
+        "site_id",
+        "site_name",
+        "product",
+        "size",
+        "quantity",
+        "households_served",
+        "children_served",
+    ]
+
+    mapping = suggest_header_mapping(
+        headers,
+        dataset_type="distribution_log",
+    )
+
+    assert mapping == {
+        header: header
+        for header in headers
+    }
+
+
+def test_alternate_distribution_headers_map_automatically():
+    alternate_df = pd.read_csv(
+        SAMPLE_DIR / "distribution_log_alternate_headers.csv",
+        nrows=0,
+    )
+
+    mapping = suggest_header_mapping(
+        alternate_df.columns.tolist(),
+        dataset_type="distribution_log",
+    )
+
+    assert mapping == {
+        "Distribution Date": "date",
+        "Site ID": "site_id",
+        "Partner": "site_name",
+        "Product Category": "product",
+        "Product Size": "size",
+        "Qty": "quantity",
+        "Households": "households_served",
+        "Children": "children_served",
+    }
+
+
+def test_fuzzy_header_mapping_handles_minor_typos():
+    mapping = suggest_header_mapping(
+        [
+            "Distribtion Date",
+            "Quantty",
+        ],
+        dataset_type="distribution_log",
+    )
+
+    assert mapping["Distribtion Date"] == "date"
+    assert mapping["Quantty"] == "quantity"
+
+
+def test_unknown_header_remains_unmapped():
+    mapping = suggest_header_mapping(
+        [
+            "Mystery Column",
+        ],
+        dataset_type="distribution_log",
+    )
+
+    assert mapping["Mystery Column"] is None
+
+
+def test_header_mapping_does_not_assign_same_target_twice():
+    mapping = suggest_header_mapping(
+        [
+            "Partner",
+            "Site Name",
+        ],
+        dataset_type="distribution_log",
+    )
+
+    mapped_targets = [
+        target
+        for target in mapping.values()
+        if target is not None
+    ]
+
+    assert mapped_targets.count("site_name") == 1
+
+
+def test_reject_unknown_dataset_type():
+    with pytest.raises(HeaderMappingError):
+        suggest_header_mapping(
+            ["date"],
+            dataset_type="unknown_dataset",
+        )
+
+def test_apply_alternate_header_mapping_restores_canonical_distribution_table():
+    clean_df = pd.read_csv(
+        SAMPLE_DIR / "distribution_log_clean.csv"
+    )
+
+    alternate_df = pd.read_csv(
+        SAMPLE_DIR / "distribution_log_alternate_headers.csv"
+    )
+
+    mapping = suggest_header_mapping(
+        alternate_df.columns.tolist(),
+        dataset_type="distribution_log",
+    )
+
+    mapped_df = apply_header_mapping(
+        alternate_df,
+        mapping,
+        dataset_type="distribution_log",
+    )
+
+    assert list(mapped_df.columns) == list(clean_df.columns)
+
+    pd.testing.assert_frame_equal(
+        mapped_df.reset_index(drop=True),
+        clean_df.reset_index(drop=True),
+    )
+
+
+def test_apply_header_mapping_preserves_unmapped_extra_columns():
+    df = pd.DataFrame(
+        {
+            "Distribution Date": ["2026-01-01"],
+            "Qty": [100],
+            "Notes": ["Emergency distribution"],
+        }
+    )
+
+    mapping = {
+        "Distribution Date": "date",
+        "Qty": "quantity",
+        "Notes": None,
+    }
+
+    mapped_df = apply_header_mapping(
+        df,
+        mapping,
+        dataset_type="distribution_log",
+    )
+
+    assert list(mapped_df.columns) == [
+        "date",
+        "quantity",
+        "Notes",
+    ]
+
+
+def test_apply_header_mapping_rejects_duplicate_targets():
+    df = pd.DataFrame(
+        {
+            "Partner": ["Site A"],
+            "Site Name": ["Site A"],
+        }
+    )
+
+    mapping = {
+        "Partner": "site_name",
+        "Site Name": "site_name",
+    }
+
+    with pytest.raises(HeaderMappingError):
+        apply_header_mapping(
+            df,
+            mapping,
+            dataset_type="distribution_log",
+        )
+
+
+def test_apply_header_mapping_rejects_invalid_target():
+    df = pd.DataFrame(
+        {
+            "Qty": [100],
+        }
+    )
+
+    mapping = {
+        "Qty": "made_up_column",
+    }
+
+    with pytest.raises(HeaderMappingError):
+        apply_header_mapping(
+            df,
+            mapping,
+            dataset_type="distribution_log",
+        )
