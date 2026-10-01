@@ -952,72 +952,275 @@ in outreach, signatures, portfolio descriptions, or professional communication u
 
 ---
 
+# Decision 031 — Partner Survey Minimum Required Fields
+
+**Status:** Accepted
+
+The Partner Intake Survey is optional as an application input.
+
+When a survey file or survey record is provided, the minimum required canonical fields are:
+
+```text
+site_name
+zip_code
+agency_type
+families_served_per_month
+```
+
+The following fields remain optional enrichment fields:
+
+```text
+children_under_4_per_month
+menstruating_clients_per_month
+poverty_share_band
+priority_population_flags
+storage_capacity_cases
+distribution_frequency
+recent_stockout_sizes
+preferred_contact
+languages_spoken
+```
+
+### Rationale
+
+The project brief treats the Partner Intake Survey itself as optional.
+
+Requiring every enrichment field would unnecessarily reject usable partner data and make adoption harder.
+
+Optional fields may improve later forecasting, equity weighting, storage constraints, or reporting, but their absence should not make the entire survey invalid.
+
+### Consequence
+
+Pandera validation must require only the four minimum fields above when survey data is supplied.
+
+Missing optional fields may reduce available functionality or trigger a clearly explained fallback, but should not invalidate the whole survey.
+
+The Streamlit survey form may still encourage users to provide additional fields without making them mandatory at the ingestion-contract level.
+
+---
+
+# Decision 032 — Recent Stockouts Use Product-Qualified Identifiers
+
+**Status:** Accepted
+
+The preferred canonical representation for `recent_stockout_sizes` is:
+
+```text
+product:size
+```
+
+Examples:
+
+```text
+diaper:4
+pull_up:3T-4T
+period_pad:regular
+period_tampon:super
+adult_incontinence:L
+```
+
+### Rationale
+
+Some size labels are shared across multiple products.
+
+Examples such as:
+
+```text
+regular
+one_size
+```
+
+are ambiguous without product context.
+
+### Consequence
+
+Week 2 ingestion should normalize product-qualified identifiers directly.
+
+A bare size value may be automatically converted only when it maps unambiguously to exactly one canonical product-size combination.
+
+Ambiguous bare values must be flagged rather than guessed.
+
+Existing synthetic bare diaper sizes such as:
+
+```text
+4
+5
+6
+```
+
+may be safely normalized to:
+
+```text
+diaper:4
+diaper:5
+diaper:6
+```
+
+because those values are unambiguous in the current controlled vocabulary.
+
+---
+
+# Decision 033 — Conservative Pack-to-Unit Parsing
+
+**Status:** Accepted
+
+Canonical quantities remain individual units.
+
+Version 1 will automatically normalize only quantity formats whose meaning is deterministic.
+
+Examples that may be accepted:
+
+```text
+300
+300.0
+300 units
+12 packs x 25 units
+12 pack x 25 units
+```
+
+when they resolve to a non-negative whole number of individual units.
+
+### Rationale
+
+Forecasting, inventory analysis, and allocation depend on a consistent unit of measure.
+
+Guessing pack sizes or interpreting ambiguous text could silently corrupt all downstream analytics.
+
+### Consequence
+
+Values such as:
+
+```text
+12 packs
+about 300
+12 cases x ?
+```
+
+must be flagged for user correction rather than guessed.
+
+Negative quantities are invalid.
+
+Numeric values containing a fractional unit are invalid unless the numeric value is mathematically equivalent to a whole number, such as `300.0`.
+
+The data-quality summary must report quantity conversions and unresolved quantity errors.
+
+---
+
+# Decision 034 — Missing Site IDs Are Generated Deterministically
+
+**Status:** Accepted
+
+If a Distribution Log provides a valid `site_id`, the application's ingestion layer preserves it.
+
+If `site_id` is missing, the application generates a deterministic identifier from normalized `site_name`.
+
+The generated identifier should use a readable normalized slug with an `AUTO_` prefix.
+
+Example:
+
+```text
+Hope Community Center
+```
+
+may normalize to:
+
+```text
+AUTO_HOPE_COMMUNITY_CENTER
+```
+
+If normalized site names collide, the identifier must receive a short deterministic suffix rather than depending on row order.
+
+### Rationale
+
+Row-number-based identifiers such as:
+
+```text
+SITE_001
+SITE_002
+```
+
+could change when new records are inserted or file ordering changes.
+
+A deterministic identifier provides more stable reconciliation across uploads.
+
+### Consequence
+
+Generated identifiers must not depend on dataframe row position.
+
+Survey records, which do not currently contain `site_id`, will be reconciled to distribution-history sites through normalized `site_name`.
+
+Survey-only new partners may receive a generated identifier using the same deterministic rule.
+
+---
+
+# Decision 035 — Duplicate Handling Depends on Input Semantics
+
+**Status:** Accepted
+
+Duplicate detection is required, but Version 1 must not apply a universal automatic `drop_duplicates()` rule.
+
+### Distribution Log
+
+Exact duplicate rows are detected and reported as warnings.
+
+They are preserved by default because the current data contract has no transaction identifier and identical distributions may represent separate valid transactions.
+
+### Incoming Supply
+
+Exact duplicate rows are detected and reported as warnings.
+
+They are preserved by default because separate donations, purchases, or shipments may share the same visible attributes.
+
+### Current Inventory
+
+Multiple rows with the same canonical snapshot key:
+
+```text
+as_of_date
+product
+size
+location
+```
+
+are treated as an unresolved validation problem.
+
+The application must not silently sum or drop them until the user resolves the ambiguity.
+
+### Partner Survey
+
+More than one row for the same normalized `site_name` is treated as an unresolved validation problem because the canonical expectation is one current survey record per partner.
+
+### Rationale
+
+The meaning of a duplicate differs by dataset.
+
+Automatically dropping records could understate real transactions, while automatically summing duplicated inventory could materially overstate available supply.
+
+### Consequence
+
+The data-quality experience must distinguish:
+
+```text
+warnings
+blocking validation problems
+automatic corrections
+```
+
+Duplicate behavior must be tested separately for each canonical input.
+
+---
+
 # Pending Decisions
 
-The following items are intentionally unresolved and should be addressed during Week 2.
+The original Week 2 ingestion questions have been resolved as follows:
 
-## P1 — Partner Survey Required vs Optional Fields
+- P1 — Partner Survey requiredness → resolved by Decision 031.
+- P2 — Recent stockout representation → resolved by Decision 032.
+- P3 — Pack parsing rules → resolved by Decision 033.
+- P4 — Missing `site_id` behavior → resolved by Decision 034.
+- P5 — Duplicate definition and handling → resolved by Decision 035.
 
-`docs/data_dictionary.md` and `docs/partner_survey_spec.md` currently differ on requiredness for several fields.
-
-Week 2 must resolve this before locking the Pandera survey schema.
-
-Do not silently choose one document over the other.
-
----
-
-## P2 — Canonical Recent Stockout Representation
-
-Determine whether:
-
-```text
-recent_stockout_sizes
-```
-
-will use:
-
-- raw size strings;
-- product-size identifiers;
-- another normalized representation.
-
-The preferred design direction is product-size identifiers because they avoid ambiguity.
-
----
-
-## P3 — Pack Parsing Rules
-
-Define exactly which raw pack formats Version 1 will automatically parse.
-
-Potential supported example:
-
-```text
-12 packs x 25 units
-```
-
-Define what happens when:
-
-- pack count is invalid;
-- pack size is missing;
-- units are ambiguous;
-- text cannot be parsed safely.
-
----
-
-## P4 — Missing `site_id`
-
-The current data contract allows `site_id` to be optional.
-
-Week 2 must determine the exact method for generating or reconciling a site identifier from `site_name` when one is absent.
-
-The method should be deterministic.
-
----
-
-## P5 — Duplicate Definition
-
-Week 2 validation must define what constitutes a duplicate row for each input type.
-
-Do not simply call all repeated values duplicates without considering valid repeated transactions.
+No additional ingestion-contract decision is currently blocking Week 2 implementation.
 
 ---
 
