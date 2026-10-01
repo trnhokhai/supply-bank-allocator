@@ -10,8 +10,11 @@ from src.ingest import (
     HeaderMappingError,
     NormalizationError,
     QuantityParseError,
+    SiteIdentityError,
     apply_header_mapping,
+    assign_site_ids,
     normalize_product,
+    normalize_site_name,
     normalize_size,
     parse_quantity_to_units,
     suggest_header_mapping,
@@ -356,3 +359,224 @@ def test_apply_header_mapping_rejects_invalid_target():
             mapping,
             dataset_type="distribution_log",
         )
+
+def test_normalize_site_name_trims_and_collapses_whitespace():
+    assert normalize_site_name(
+        "  Hope   Community   Center  "
+    ) == "Hope Community Center"
+
+
+def test_normalize_site_name_rejects_blank_value():
+    with pytest.raises(SiteIdentityError):
+        normalize_site_name("   ")
+
+
+def test_assign_site_ids_preserves_existing_ids():
+    df = pd.DataFrame(
+        {
+            "site_id": ["BANK_001", "BANK_002"],
+            "site_name": [
+                "Hope Community Center",
+                "Northside Pantry",
+            ],
+        }
+    )
+
+    result = assign_site_ids(df)
+
+    assert result["site_id"].tolist() == [
+        "BANK_001",
+        "BANK_002",
+    ]
+
+
+def test_assign_site_ids_generates_missing_id():
+    df = pd.DataFrame(
+        {
+            "site_name": [
+                "Hope Community Center",
+            ],
+        }
+    )
+
+    result = assign_site_ids(df)
+
+    assert result.loc[
+        0,
+        "site_id",
+    ] == "AUTO_HOPE_COMMUNITY_CENTER"
+
+
+def test_assign_site_ids_reuses_existing_id_for_same_site():
+    df = pd.DataFrame(
+        {
+            "site_id": [
+                "BANK_001",
+                None,
+            ],
+            "site_name": [
+                "Hope Community Center",
+                "  Hope   Community Center ",
+            ],
+        }
+    )
+
+    result = assign_site_ids(df)
+
+    assert result["site_id"].tolist() == [
+        "BANK_001",
+        "BANK_001",
+    ]
+
+
+def test_assign_site_ids_is_independent_of_row_order():
+    df = pd.DataFrame(
+        {
+            "site_name": [
+                "Hope Community Center",
+                "Northside Pantry",
+            ],
+        }
+    )
+
+    forward = assign_site_ids(df)
+
+    reversed_result = assign_site_ids(
+        df.iloc[::-1].reset_index(drop=True)
+    )
+
+    forward_mapping = dict(
+        zip(
+            forward["site_name"],
+            forward["site_id"],
+        )
+    )
+
+    reversed_mapping = dict(
+        zip(
+            reversed_result["site_name"],
+            reversed_result["site_id"],
+        )
+    )
+
+    assert forward_mapping == reversed_mapping
+
+
+def test_assign_site_ids_handles_slug_collisions_deterministically():
+    df = pd.DataFrame(
+        {
+            "site_name": [
+                "Hope Center",
+                "Hope-Center",
+            ],
+        }
+    )
+
+    forward = assign_site_ids(df)
+
+    reversed_result = assign_site_ids(
+        df.iloc[::-1].reset_index(drop=True)
+    )
+
+    forward_mapping = dict(
+        zip(
+            forward["site_name"],
+            forward["site_id"],
+        )
+    )
+
+    reversed_mapping = dict(
+        zip(
+            reversed_result["site_name"],
+            reversed_result["site_id"],
+        )
+    )
+
+    assert forward_mapping == reversed_mapping
+
+    generated_ids = list(
+        forward_mapping.values()
+    )
+
+    assert len(set(generated_ids)) == 2
+
+    assert all(
+        site_id.startswith(
+            "AUTO_HOPE_CENTER_"
+        )
+        for site_id in generated_ids
+    )
+
+
+def test_assign_site_ids_rejects_conflicting_ids_for_same_site():
+    df = pd.DataFrame(
+        {
+            "site_id": [
+                "BANK_001",
+                "BANK_999",
+            ],
+            "site_name": [
+                "Hope Community Center",
+                "Hope Community Center",
+            ],
+        }
+    )
+
+    with pytest.raises(SiteIdentityError):
+        assign_site_ids(df)
+
+
+def test_assign_site_ids_rejects_same_id_for_different_sites():
+    df = pd.DataFrame(
+        {
+            "site_id": [
+                "BANK_001",
+                "BANK_001",
+            ],
+            "site_name": [
+                "Hope Community Center",
+                "Northside Pantry",
+            ],
+        }
+    )
+
+    with pytest.raises(SiteIdentityError):
+        assign_site_ids(df)
+
+def test_synthetic_distribution_preserves_existing_site_identity():
+    distribution_df = pd.read_csv(
+        SAMPLE_DIR / "distribution_log_clean.csv"
+    )
+
+    result = assign_site_ids(
+        distribution_df
+    )
+
+    assert result["site_id"].nunique() == 25
+    assert set(result["site_id"]) == {
+        f"SITE_{site_number:03d}"
+        for site_number in range(1, 26)
+    }
+
+    expected_pairs = (
+        distribution_df[
+            ["site_id", "site_name"]
+        ]
+        .drop_duplicates()
+        .sort_values("site_id")
+        .reset_index(drop=True)
+    )
+
+    actual_pairs = (
+        result[
+            ["site_id", "site_name"]
+        ]
+        .drop_duplicates()
+        .sort_values("site_id")
+        .reset_index(drop=True)
+    )
+
+    pd.testing.assert_frame_equal(
+        actual_pairs,
+        expected_pairs,
+    )
