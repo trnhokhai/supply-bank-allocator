@@ -738,32 +738,43 @@ Survey responses should be used only for planning, forecasting, allocation, and 
 
 Before accepting a survey submission, the Streamlit form should validate the following:
 
-### Required Text Fields
+### Minimum Required Fields
 
-The following field must not be blank:
+When a Partner Survey record is provided, the following canonical fields are required:
 
 - `site_name`
-
-Leading and trailing whitespace should be removed.
-
-### Numeric Fields
-
-The following fields must contain non-negative integer values:
-
+- `zip_code`
+- `agency_type`
 - `families_served_per_month`
+
+`site_name` and `zip_code` must not be blank.
+
+`families_served_per_month` must contain a non-negative integer.
+
+`agency_type` must map to an approved canonical value.
+
+### Optional Numeric Fields
+
+The following fields are optional enrichment fields:
+
 - `children_under_4_per_month`
 - `menstruating_clients_per_month`
 - `storage_capacity_cases`
 
-Values below zero should not be accepted.
+When provided, they must contain non-negative integer values.
 
-### Controlled Categories
+Missing optional numeric fields should not invalidate the entire survey record.
 
-The following fields must map to approved values from the data contract:
+### Optional Controlled Categories
 
-- `agency_type`
+The following fields are optional enrichment fields:
+
 - `poverty_share_band`
 - `distribution_frequency`
+
+When provided, they must map to approved values from the data contract.
+
+Missing optional controlled-category fields should not invalidate the entire survey record.
 
 ### Optional Multi-Select Fields
 

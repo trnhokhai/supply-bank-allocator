@@ -608,7 +608,17 @@ The human-facing survey vocabulary and internal canonical vocabulary may differ 
 
 # Decision 019 — Recent Stockout Values Need Product Context
 
-**Status:** Provisional design direction
+**Status:** Superseded by Decision 032
+
+This provisional direction was finalized during Week 2.
+
+Decision 032 now defines the accepted canonical behavior:
+
+- preferred representation: `product:size`;
+- unambiguous bare values may be normalized automatically;
+- ambiguous bare values must be flagged rather than guessed.
+
+Decision 032 is authoritative for implementation.
 
 Size-only values can be ambiguous.
 

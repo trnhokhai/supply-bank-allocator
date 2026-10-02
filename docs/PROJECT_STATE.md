@@ -1,8 +1,8 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 1, 2026  
-**Current gate:** Week 2 — Ingestion, Validation, and the Upload Experience  
-**Repository:** `trnhokhai/supply-bank-allocator`  
+**Last updated:** October 2, 2026
+**Current gate:** Week 2 closeout — Gate 2 technical acceptance met; practitioner outreach pending
+**Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
 ---
@@ -54,7 +54,7 @@ Khai Tran
 
 ### External Role Title
 
-**Business Intelligence & Supply Chain Analytics Fellow**  
+**Business Intelligence & Supply Chain Analytics Fellow**
 Chicago Education Advocacy Cooperative (ChiEAC)
 
 Use this title in external project communication unless Khai says otherwise.
@@ -145,10 +145,22 @@ Completed:
 
 `app.py`
 
-- Currently empty.
-- Week 2 will begin the actual Streamlit application.
+- Streamlit application home page.
+- Introduces the product and current workflow.
 
-The planned `pages/` directory is not currently tracked on GitHub because it has no committed files yet.
+`pages/1_Upload.py`
+
+- Working Upload page.
+- Supports user-uploaded CSV and XLSX files.
+- Supports one-click Demo Mode.
+- Shows raw-input previews.
+- Suggests canonical header mappings with editable dropdowns.
+- Runs cleaning and validation through the shared backend workflow.
+- Displays data-quality corrections, warnings, row counts, and cleaned previews.
+- Displays derived Week 2 planning tables:
+  - ISO-weekly distribution;
+  - inactive spans;
+  - reconciled site master.
 
 ### Core source files
 
@@ -158,8 +170,54 @@ The planned `pages/` directory is not currently tracked on GitHub because it has
 
 `src/synth.py`
 
-- Main deterministic synthetic-data pipeline.
-- Consider Week 1 generator logic locked unless a downstream ingestion requirement exposes a genuine defect.
+- Deterministic synthetic-data pipeline.
+- Week 1 generator remains locked unless a genuine downstream defect is identified.
+
+`src/ingest.py`
+
+- Canonical header mapping.
+- Product and product-aware size normalization.
+- Site-name normalization.
+- Conservative pack-to-unit quantity parsing.
+- Deterministic missing-site-ID generation.
+
+`src/validate.py`
+
+- Pandera schemas for all four canonical inputs.
+- Friendly validation issues.
+- Dataset-specific duplicate handling.
+
+`src/clean.py`
+
+- End-to-end cleaning pipelines for:
+  - Distribution Log;
+  - Current Inventory;
+  - Incoming Supply;
+  - Partner Survey.
+- Produces explainable Data Quality Reports.
+
+`src/aggregate.py`
+
+- ISO-week aggregation.
+- Active/inactive site calendar.
+- Inactive-span detection.
+- Zero-fills missing product-size weeks only when the site is otherwise active.
+
+`src/site_master.py`
+
+- Reconciles partner identities across distribution history and survey data.
+- Distribution-history IDs remain authoritative.
+- Supports deterministic IDs for survey-only partners.
+
+`src/file_io.py`
+
+- Reads CSV and XLSX inputs.
+- Provides Demo Mode loading for all four synthetic inputs.
+
+`src/workflow.py`
+
+- Connects header mapping, cleaning, validation, and derived planning tables.
+- Keeps Streamlit UI separate from business logic.
 
 `src/validation_charts.py`
 
@@ -172,25 +230,29 @@ The planned `pages/` directory is not currently tracked on GitHub because it has
 - `docs/synthetic_data.md`
 - `docs/partner_survey_spec.md`
 - `docs/project_plan.md`
+- `docs/PROJECT_STATE.md`
+- `docs/DECISIONS.md`
 - `docs/figures/`
 
 ### Tests
 
+Current automated suites include:
+
 - `tests/test_templates.py`
 - `tests/test_synth.py`
+- `tests/test_ingest.py`
+- `tests/test_validate.py`
+- `tests/test_clean.py`
+- `tests/test_aggregate.py`
+- `tests/test_site_master.py`
+- `tests/test_file_io.py`
+- `tests/test_workflow.py`
 
-Last verified during Week 1:
+Latest verified full-suite result:
 
-- `tests/test_templates.py`: 3 tests passed.
-- `tests/test_synth.py`: 32 tests passed after the final Week 1 changes.
-
-A complete combined suite should be run at the beginning of Week 2 to establish a fresh baseline:
-
-```powershell
-python -m pytest -v
-```
-
-Do not assume a combined total until that command is actually run.
+```text
+140 passed
+0 warnings
 
 ---
 
@@ -417,66 +479,83 @@ Header problems are treated as **file-level mapping problems**, not row-level di
 
 ---
 
-## 10. Known Documentation / Design Questions to Resolve in Week 2
+## 10. Week 2 Decisions Resolved
 
-Do not silently resolve these. Discuss them before implementing validation rules.
+The Week 2 ingestion-contract questions identified at the beginning of the gate have been resolved and implemented.
 
-### A. Partner survey requiredness
+### Partner Survey requiredness
 
-There is currently a documentation inconsistency:
+Resolved by Decision 031.
 
-`docs/data_dictionary.md` marks several partner-survey fields as optional, while `docs/partner_survey_spec.md` treats some of them as required for the proposed form experience.
+The Partner Survey remains an optional application input.
 
-Examples include:
-
-- `children_under_4_per_month`
-- `menstruating_clients_per_month`
-- `poverty_share_band`
-- `storage_capacity_cases`
-- `distribution_frequency`
-
-The ChiEAC project brief defines the fields but does not explicitly prescribe the required/optional status of each one.
-
-Resolve this before locking the Pandera partner-survey schema.
-
-### B. Recent stockout size identifiers
-
-A raw size such as:
+When survey data is provided, the minimum required canonical fields are:
 
 ```text
-regular
-L
-one_size
+site_name
+zip_code
+agency_type
+families_served_per_month
 ```
 
-can be ambiguous across product categories.
+The remaining survey fields are optional enrichment fields.
 
-The survey specification recommends explicit product-size identifiers such as:
+`docs/partner_survey_spec.md` was updated to match this implementation.
+
+### Recent stockout identifiers
+
+Resolved by Decision 032.
+
+The preferred canonical format is:
+
+```text
+product:size
+```
+
+Examples:
 
 ```text
 diaper:4
-period_pad:regular
-period_tampon:regular
+period_pad:overnight
 adult_incontinence:L
 ```
 
-Week 2 ingestion should decide and document the canonical normalization behavior.
+Bare values are normalized only when their meaning is unambiguous.
 
-### C. Pack conversion
+### Pack-to-unit conversion
+
+Resolved by Decision 033.
 
 Canonical quantities are individual units.
 
-Messy input may contain values such as:
+The ingestion layer safely supports deterministic values such as:
 
 ```text
+300
+300.0
+300 units
 12 packs x 25 units
 ```
 
-Week 2 must define predictable parsing, conversion, error handling, and user messaging.
+Ambiguous quantities are rejected instead of guessed.
+
+### Missing site IDs
+
+Resolved by Decision 034.
+
+Existing valid site IDs are preserved.
+
+Missing site IDs are generated deterministically from normalized site names using readable `AUTO_` identifiers.
+
+### Duplicate handling
+
+Resolved by Decision 035.
+
+Duplicate behavior is dataset-specific rather than using a universal automatic deduplication rule.
 
 ---
 
-## 11. Current Gate — Week 2
+## 11. Gate 2 — Technical Implementation Status
 
 ### Gate Name
 
@@ -486,68 +565,138 @@ Week 2 must define predictable parsing, conversion, error handling, and user mes
 
 A supply-bank staff member can upload imperfect real-world files and receive clean, trusted tables.
 
-### Required Week 2 Work
+### Implemented
 
-Build the Streamlit multipage application skeleton and Upload page with:
+The Week 2 technical implementation now includes:
 
-- file pickers;
-- header mapping;
-- fuzzy-matched header defaults;
-- size normalization;
-- pack-to-unit conversion;
-- data-quality reporting.
+- Streamlit multipage application skeleton;
+- Upload page;
+- CSV and XLSX file reading;
+- four canonical input domains;
+- fuzzy/default header mapping with manual dropdown review;
+- product normalization;
+- product-aware size normalization;
+- pack-to-unit quantity conversion;
+- deterministic missing-site-ID generation;
+- Pandera validation;
+- dataset-specific duplicate handling;
+- friendly validation errors;
+- explainable Data Quality Reports;
+- cleaned-data previews;
+- ISO-week distribution aggregation;
+- active/inactive site calendar;
+- inactive-span detection;
+- conditional zero filling only when a site is otherwise active;
+- reconciled site master;
+- optional survey enrichment;
+- one-click Demo Mode;
+- derived planning tables displayed in the Upload workflow.
 
-Implement Pandera validation for all four canonical inputs.
-
-Provide friendly user-facing errors for common failures such as:
-
-- incorrect date format;
-- unknown product or size;
-- negative quantity;
-- duplicate rows;
-- missing site name;
-- missing required columns;
-- invalid categorical values;
-- malformed numeric values;
-- invalid incoming-supply status;
-- other high-probability input problems identified during implementation.
-
-Also:
-
-- aggregate distribution data to ISO weeks;
-- detect inactive spans;
-- build the site master table from distribution history plus survey data;
-- add one-click Demo Mode using the synthetic datasets;
-- write tests for validators and aggregation;
-- conduct stakeholder interviews if practitioners respond;
-- write approximately half a page of findings per completed interview.
-
-Do not begin Week 3 forecasting work until Gate 2 is sufficiently complete.
+Forecasting has intentionally not begun during Week 2.
 
 ---
 
-## 12. Gate 2 Acceptance Benchmarks
+## 12. Gate 2 Acceptance Results
 
-Before considering Week 2 complete:
+The technical acceptance benchmarks have been exercised through automated tests and manual Streamlit checks.
 
-1. The deliberately messy synthetic rows must be caught or corrected.
-2. The data-quality experience must explain what was corrected, rejected, or dropped.
-3. The alternate-header file should map correctly with no more than two manual dropdown corrections.
-4. Validator and aggregation tests must pass.
-5. Demo Mode should load the synthetic dataset in under five seconds.
+### Messy synthetic data
 
-Deliverables:
+Demo Distribution Log:
 
-- working Upload page;
-- validation test suite;
-- practitioner interview notes if interviews occur;
-- updated data dictionary if practitioner findings materially change the contract.
+```text
+Rows uploaded:   24,422
+Rows cleaned:    24,422
+Rows corrected:     733
+Rows dropped:         0
+```
+
+Correction breakdown:
+
+```text
+product:   244 rows
+size:      245 rows
+quantity:  244 rows
+```
+
+The Data Quality Details panel explains each correction category.
+
+### Alternate-header mapping
+
+The controlled alternate-header Distribution Log was uploaded through the Streamlit UI.
+
+Result:
+
+```text
+8 of 8 headers mapped correctly
+0 manual dropdown changes required
+```
+
+This exceeds the Gate 2 benchmark of no more than two manual corrections.
+
+### Friendly validation error
+
+A temporary Distribution Log missing the required `quantity` field was manually uploaded.
+
+The application did not crash.
+
+It returned the user-facing message:
+
+```text
+Distribution Log: Map all required columns before cleaning.
+Still missing: quantity.
+```
+
+The temporary test file was removed after testing.
+
+### Demo Mode performance
+
+Five local Demo Mode loads were benchmarked.
+
+```text
+Average: 29.6 ms
+Slowest: 34.2 ms
+```
+
+The required benchmark is under five seconds.
+
+### Derived planning outputs
+
+Current Demo Mode result:
+
+```text
+Weekly distribution records: 25,731
+Zero-filled product-size weeks: 1,309
+Inactive spans: 1
+Partner sites: 25
+```
+
+The one detected inactive span corresponds to the intentionally planted six-week gap for `SITE_008`.
+
+Late onboarding for `SITE_024` and `SITE_025` is not misclassified as inactivity.
+
+### Automated verification
+
+Latest full-suite result:
+
+```text
+140 passed
+0 warnings
+```
+
+Streamlit syntax verification:
+
+```powershell
+python -m py_compile app.py pages/1_Upload.py
+```
+
+completed without error.
 
 ---
 
-## 13. Week 2 External Dependencies
+## 13. Practitioner Outreach Status
 
-On **October 1, 2026**, Khai sent practitioner interview outreach to:
+On October 1, 2026, Khai sent practitioner interview outreach to:
 
 1. **Share Our Spare**
    - Direct outreach to Jesseca Rhymes.
@@ -561,49 +710,53 @@ On **October 1, 2026**, Khai sent practitioner interview outreach to:
    - Sent to the organization contact inbox.
    - Focused on period-product supply and distribution.
 
-Current status:
+Current status as of October 2, 2026:
 
-**Waiting for replies. No practitioner interview has been completed or scheduled yet.**
+**No practitioner has replied, scheduled an interview, or completed an interview yet.**
 
-Do not fabricate interview findings.
+This remains an external dependency and does not block the completed technical Gate 2 work.
 
-If a practitioner replies, prioritize scheduling the interview without blocking technical Week 2 work.
+If a practitioner replies next week:
+
+1. schedule the interview;
+2. document approximately half a page of actual findings;
+3. compare findings with the existing data contract;
+4. change the contract only through a deliberate documented decision.
+
+Do not fabricate practitioner findings.
 
 ---
 
-## 14. Week 2 Starting Point
+## 14. Week 2 Closeout and Next Gate
 
-The first technical checkpoint should be:
+### Week 2 status
 
-### Checkpoint 1 — Establish the Upload Application Foundation
+**Technical Gate 2 acceptance criteria are met.**
 
-Before building:
+Remaining closeout work:
 
-1. Read the authoritative Week 2 section of the ChiEAC Project Brief.
-2. Read this file.
-3. Read `docs/DECISIONS.md`.
-4. Inspect:
-   - `README.md`
-   - `docs/data_dictionary.md`
-   - `docs/partner_survey_spec.md`
-   - `src/synth.py`
-   - `data/sample/`
-   - existing tests
-5. Run the complete existing test suite:
+1. finish documentation alignment;
+2. run the final test suite;
+3. commit and push Week 2 documentation;
+4. preserve practitioner outreach as a pending external dependency.
 
-```powershell
-python -m pytest -v
-```
+### Next gate
 
-6. Confirm the baseline before changing code.
+**Week 3 — Forecasting**
 
-Then begin:
+Do not begin forecasting until the Week 2 closeout commit is pushed.
 
-- `app.py`
-- the first committed Streamlit page under `pages/`
-- the Week 2 ingestion architecture
+The first Week 3 checkpoint should begin with:
 
-Do not rewrite the Week 1 synthetic generator merely to begin Week 2.
+1. read the authoritative Week 3 section of the ChiEAC Project Brief;
+2. read the committed GitHub state;
+3. read this `PROJECT_STATE.md`;
+4. read `docs/DECISIONS.md`;
+5. verify the Week 2 handoff before writing forecasting code.
+
+Week 3 should build on the trusted weekly distribution table produced by Week 2 rather than returning to raw uploaded data.
+
+The Week 2 ingestion, validation, cleaning, aggregation, and site-identity layers should be treated as locked unless forecasting exposes a genuine defect.
 
 ---
 
