@@ -8,6 +8,7 @@ from src.ingest import (
 )
 from src.workflow import (
     WorkflowError,
+    build_derived_outputs,
     prepare_input,
 )
 
@@ -164,4 +165,127 @@ def test_unknown_dataset_type_is_rejected():
             dataframe,
             {"example": None},
             dataset_type="unknown",
+        )
+
+def test_build_derived_outputs_from_demo_inputs():
+    distribution = pd.read_csv(
+        SAMPLE_DIR
+        / "distribution_log_clean.csv"
+    )
+
+    survey = pd.read_csv(
+        SAMPLE_DIR
+        / "partner_survey.csv"
+    )
+
+    distribution_mapping = (
+        suggest_header_mapping(
+            distribution.columns,
+            dataset_type="distribution_log",
+        )
+    )
+
+    survey_mapping = (
+        suggest_header_mapping(
+            survey.columns,
+            dataset_type="partner_survey",
+        )
+    )
+
+    prepared = {
+        "distribution_log": prepare_input(
+            distribution,
+            distribution_mapping,
+            dataset_type="distribution_log",
+        ),
+        "partner_survey": prepare_input(
+            survey,
+            survey_mapping,
+            dataset_type="partner_survey",
+        ),
+    }
+
+    outputs = build_derived_outputs(
+        prepared
+    )
+
+    assert not (
+        outputs.weekly_distribution.empty
+    )
+
+    assert len(
+        outputs.site_master
+    ) == 25
+
+    assert (
+        outputs.site_master[
+            "site_id"
+        ]
+        .nunique()
+        == 25
+    )
+
+    site_008 = (
+        outputs.inactive_spans.loc[
+            outputs.inactive_spans[
+                "site_id"
+            ]
+            .eq("SITE_008")
+        ]
+    )
+
+    assert len(site_008) == 1
+
+    assert (
+        int(
+            site_008.iloc[
+                0
+            ]["weeks_inactive"]
+        )
+        == 6
+    )
+
+
+def test_build_derived_outputs_without_survey():
+    distribution = pd.read_csv(
+        SAMPLE_DIR
+        / "distribution_log_clean.csv"
+    )
+
+    mapping = suggest_header_mapping(
+        distribution.columns,
+        dataset_type="distribution_log",
+    )
+
+    prepared = {
+        "distribution_log": prepare_input(
+            distribution,
+            mapping,
+            dataset_type="distribution_log",
+        ),
+    }
+
+    outputs = build_derived_outputs(
+        prepared
+    )
+
+    assert len(
+        outputs.site_master
+    ) == 25
+
+    assert not (
+        outputs.site_master[
+            "has_survey_data"
+        ]
+        .any()
+    )
+
+
+def test_derived_outputs_require_distribution():
+    with pytest.raises(
+        WorkflowError,
+        match="Distribution Log",
+    ):
+        build_derived_outputs(
+            {}
         )

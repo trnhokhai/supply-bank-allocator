@@ -16,6 +16,14 @@ from src.validate import (
     REQUIRED_COLUMNS,
 )
 
+from src.aggregate import (
+    aggregate_distribution_to_iso_weeks,
+    find_inactive_spans,
+)
+
+from src.site_master import (
+    build_site_master,
+)
 
 class WorkflowError(ValueError):
     """Raised when an upload cannot enter the cleaning pipeline safely."""
@@ -86,4 +94,83 @@ def prepare_input(
     return PreparedInput(
         mapped_dataframe=mapped,
         cleaning_result=cleaning_result,
+    )
+
+@dataclass(frozen=True)
+class DerivedOutputs:
+    """
+    Trusted analytical-preparation tables created only
+    after uploaded inputs have been cleaned and validated.
+    """
+
+    weekly_distribution: pd.DataFrame
+    inactive_spans: pd.DataFrame
+    site_master: pd.DataFrame
+
+
+def build_derived_outputs(
+    prepared_inputs,
+):
+    """
+    Build Week 2 derived tables from cleaned inputs.
+
+    Distribution history is required.
+
+    Partner survey is optional. When present, it enriches
+    the site master. When absent, the site master is still
+    created from distribution history.
+    """
+
+    if (
+        "distribution_log"
+        not in prepared_inputs
+    ):
+        raise WorkflowError(
+            "A cleaned Distribution Log is required "
+            "to build derived planning tables."
+        )
+
+    distribution = (
+        prepared_inputs[
+            "distribution_log"
+        ]
+        .cleaning_result
+        .dataframe
+    )
+
+    survey = None
+
+    if (
+        "partner_survey"
+        in prepared_inputs
+    ):
+        survey = (
+            prepared_inputs[
+                "partner_survey"
+            ]
+            .cleaning_result
+            .dataframe
+        )
+
+    weekly_distribution = (
+        aggregate_distribution_to_iso_weeks(
+            distribution
+        )
+    )
+
+    inactive_spans = (
+        find_inactive_spans(
+            distribution
+        )
+    )
+
+    site_master = build_site_master(
+        distribution,
+        survey_df=survey,
+    )
+
+    return DerivedOutputs(
+        weekly_distribution=weekly_distribution,
+        inactive_spans=inactive_spans,
+        site_master=site_master,
     )

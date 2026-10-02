@@ -12,6 +12,7 @@ from src.ingest import (
 )
 
 from src.workflow import (
+    build_derived_outputs,
     prepare_input,
 )
 
@@ -443,7 +444,30 @@ if raw_inputs:
         st.session_state[
             "processing_errors"
         ] = processing_errors
+        derived_outputs = None
+        derived_error = None
 
+        if (
+            "distribution_log"
+            in cleaned_results
+        ):
+            try:
+                derived_outputs = (
+                    build_derived_outputs(
+                        cleaned_results
+                    )
+                )
+
+            except ValueError as exc:
+                derived_error = str(exc)
+
+        st.session_state[
+            "derived_outputs"
+        ] = derived_outputs
+
+        st.session_state[
+            "derived_error"
+        ] = derived_error
     cleaned_results = st.session_state.get(
         "cleaned_results",
         {},
@@ -561,6 +585,120 @@ if raw_inputs:
                     use_container_width=True,
                     hide_index=True,
                 )
+
+    derived_outputs = st.session_state.get(
+        "derived_outputs"
+    )
+
+    derived_error = st.session_state.get(
+        "derived_error"
+    )
+
+    if derived_error:
+        st.error(
+            "Could not build derived planning tables: "
+            f"{derived_error}"
+        )
+
+    elif derived_outputs is not None:
+        st.divider()
+
+        st.markdown(
+            "## Derived Planning Tables"
+        )
+
+        st.caption(
+            "These tables are created only from cleaned "
+            "and validated inputs."
+        )
+
+        weekly = (
+            derived_outputs
+            .weekly_distribution
+        )
+
+        inactive_spans = (
+            derived_outputs
+            .inactive_spans
+        )
+
+        site_master = (
+            derived_outputs
+            .site_master
+        )
+
+        metric_columns = st.columns(4)
+
+        metric_columns[0].metric(
+            "Weekly records",
+            f"{len(weekly):,}",
+        )
+
+        metric_columns[1].metric(
+            "Zero-filled weeks",
+            f"{int(weekly['is_imputed_zero'].sum()):,}",
+        )
+
+        metric_columns[2].metric(
+            "Inactive spans",
+            f"{len(inactive_spans):,}",
+        )
+
+        metric_columns[3].metric(
+            "Partner sites",
+            f"{len(site_master):,}",
+        )
+
+        with st.expander(
+            "Weekly Distribution",
+            expanded=False,
+        ):
+            st.caption(
+                "Distribution history aggregated to "
+                "site / product / size / ISO week."
+            )
+
+            st.dataframe(
+                weekly.head(25),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        with st.expander(
+            "Inactive Spans",
+            expanded=False,
+        ):
+            st.caption(
+                "Weeks with no site-level distribution "
+                "activity between observed active periods."
+            )
+
+            if inactive_spans.empty:
+                st.info(
+                    "No inactive spans were detected."
+                )
+
+            else:
+                st.dataframe(
+                    inactive_spans,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+        with st.expander(
+            "Site Master",
+            expanded=False,
+        ):
+            st.caption(
+                "Trusted partner identities enriched with "
+                "distribution history and available survey data."
+            )
+
+            st.dataframe(
+                site_master,
+                use_container_width=True,
+                hide_index=True,
+            )
 
 else:
     st.info(
