@@ -103,6 +103,33 @@ def baseline_forecast(series, method, horizon=4):
             "valid historical observations."
         )
 
+    
+    if "week_start" not in series.columns:
+        raise ForecastError("Missing week_start column.")
+
+    dates = pd.to_datetime(
+        series["week_start"], errors="coerce"
+    )
+
+    if (
+        dates.isna().any()
+        or dates.duplicated().any()
+        or not dates.is_monotonic_increasing
+        or (dates.dt.weekday != 0).any()
+    ):
+        raise ForecastError(
+            "History must have unique, sorted ISO-week Mondays."
+        )
+
+    if method in {"ma4", "ma8"}:
+        if not _has_consecutive_tail(
+            series, windows[method]
+        ):
+            raise ForecastError(
+                f"{method} requires consecutive calendar weeks."
+            )
+
+
     forecast_value = float(
         np.mean(values[-windows[method]:])
     )
@@ -319,4 +346,125 @@ def summarize_backtest(rows, method):
     )
 
     return summary
+
+
+def select_baseline_method(
+    series,
+    evaluation_end_week,
+    folds=4,
+    min_valid_folds=2,
+):
+    """
+    Compare baseline methods using identical historical folds.
+
+    WAPE is the primary selection metric.
+    Absolute signed bias breaks exact WAPE ties.
+
+    The selected method is provisional until the complete
+    Week 3 method portfolio has been evaluated.
+    """
+    if (
+        type(folds) is not int
+        or folds < 1
+        or type(min_valid_folds) is not int
+        or not 1 <= min_valid_folds <= folds
+    ):
+        raise ForecastError("Invalid fold requirements.")
+
+    methods = ["naive", "ma4", "ma8"]
+    eligible_results = {}
+
+    for method in methods:
+        rows = backtest_baseline(
+            series,
+            method,
+            evaluation_end_week,
+            folds=folds,
+        )
+
+        if rows["fold"].nunique() >= min_valid_folds:
+            eligible_results[method] = rows
+
+    unavailable = {
+        "method": None,
+        "wape_pct": None,
+        "bias_pct": None,
+        "compared_folds": [],
+        "scores": [],
+        "reason": "Insufficient comparable backtest folds.",
+    }
+
+    if not eligible_results:
+        return unavailable
+
+    common_folds = sorted(
+        int(fold)
+        for fold in set.intersection(
+            *(
+                set(rows["fold"].unique())
+                for rows in eligible_results.values()
+            )
+        )
+    )
+
+    if len(common_folds) < min_valid_folds:
+        return unavailable
+
+    scores = []
+
+    for method in methods:
+        if method not in eligible_results:
+            continue
+
+        rows = eligible_results[method]
+
+        comparable_rows = rows.loc[
+            rows["fold"].isin(common_folds)
+        ].copy()
+
+        metrics = summarize_backtest(
+            comparable_rows, method
+        )
+
+        scores.append({
+            "method": method,
+            "wape_pct": metrics["wape_pct"],
+            "bias_pct": metrics["bias_pct"],
+            "folds_evaluated": metrics["folds_evaluated"],
+        })
+
+    ranked = [
+        score for score in scores
+        if score["wape_pct"] is not None
+        and score["bias_pct"] is not None
+    ]
+
+    if not ranked:
+        return {
+            **unavailable,
+            "compared_folds": common_folds,
+            "scores": scores,
+            "reason": (
+                "Backtest WAPE is undefined for the "
+                "available comparison period."
+            ),
+        }
+
+    winner = min(
+        ranked,
+        key=lambda score: (
+            score["wape_pct"],
+            abs(score["bias_pct"]),
+            methods.index(score["method"]),
+        ),
+    )
+
+    return {
+        "method": winner["method"],
+        "wape_pct": winner["wape_pct"],
+        "bias_pct": winner["bias_pct"],
+        "compared_folds": common_folds,
+        "scores": scores,
+        "reason": None,
+    }
 

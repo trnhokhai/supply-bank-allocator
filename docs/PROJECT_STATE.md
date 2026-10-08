@@ -906,74 +906,60 @@ Important:
 - Direct baseline calendar validation may require
   additional hardening.
 
+
 #### Checkpoint 3 — Model Selection
+
+Status: In progress.
+
+##### Checkpoint 3A — Fair Baseline Model Selection
+
+Status: Implementation and local validation completed.
+
+Implemented:
+- Comparable-fold model selection.
+- Naive, MA4, MA8 baseline ranking.
+- WAPE as primary ranking criterion.
+- Absolute bias as tie-breaker.
+- Minimum valid-fold requirement.
+- Calendar validation for direct baseline calls.
+- Explicit N/A when reliable comparison is unavailable.
+- Python-native integer fold identifiers.
+
+Evidence:
+- Forecast tests: 21 passed.
+- Full suite: 161 passed.
+- SITE_001 / diaper / size 5:
+  - Selected method: Naive.
+  - WAPE: 15.88%.
+  - Bias: -1.32%.
+  - Four comparable evaluation folds.
+
+Limitations:
+- Bias currently acts as a tie-breaker, not a
+  model-rejection threshold.
+- Model selection remains provisional until
+  additional candidate methods are evaluated.
+- Network-level accuracy remains unverified.
+
+##### Checkpoint 3B — Additional Forecast Methods
 
 Status: Not started.
 
 Next:
-- Comparable-fold model ranking.
-- WAPE and bias selection policy.
-- Additional candidate methods.
-- Sparse-history handling.
-- Targeted tests and performance checks.
+- Simple exponential smoothing.
+- Damped Holt trend.
+- Intermittent-demand forecasting (Croston/TSB).
+- Method eligibility and analytical tests.
 
-**Gate 3 has NOT yet passed.**
+##### Checkpoint 3C — Full Model Selection
 
-### Implemented
-- src/forecast.py: baseline forecasting and rolling-origin backtesting.
-- tests/test_forecast.py: forecasting tests.
-- Naive, MA4, MA8 candidate methods.
-- Calendar-aware moving-average eligibility.
-- Four-fold, four-week rolling-origin backtesting.
-- Pooled WAPE and signed percentage bias.
-- Explicit N/A for undefined WAPE.
-- Existing Week 2 data contracts preserved.
+Status: Not started.
 
-### Test evidence
-- Forecast tests: 17 passed.
-- Full suite: 157 passed.
-- Previous pandas Timedelta deprecation warnings
-  addressed using standard-library timedelta and
-  calendar-day comparison.
+Next:
+- Integrate the complete method portfolio.
+- Validate comparable evaluation folds.
+- Finalize bias-check policy.
+- Benchmark model performance and runtime.
 
-### Synthetic data validation
-Series: SITE_001 / diaper / size 5
-Historical records: 78
-Imputed zero records: 0
-Evaluation end: 2026-09-21
-Backtest: 4 folds, 4 weeks each
+Gate 3 has NOT yet passed.
 
-Method | WAPE | Bias | Valid folds
-Naive  | 15.88% | -1.32% | 4/4
-MA4    | 16.57% | +2.68% | 4/4
-MA8    | 18.26% | +6.13% | 4/4
-
-Naive had the lowest WAPE for this individual series.
-These results DO NOT establish network-level Gate 3 WAPE.
-
-### Important safeguards
-- Forecasting consumes trusted Week 2 weekly data.
-- is_imputed_zero remains available.
-- Inactive site weeks are not assumed to have zero demand.
-- Pre-onboarding periods are not historical observations.
-- Cold-start threshold is 8 observed SITE-level weeks.
-- Model selection must compare equivalent evaluation folds.
-- Distribution quantity is a proxy for demand, not
-  necessarily unconstrained true demand.
-
-### Pending
-- Strengthen direct baseline forecasting validation.
-- Multi-series model selection and bias policy.
-- Additional forecasting methods.
-- Bottom-up versus top-down comparison.
-- Cold-start and prediction ranges.
-- Network-level WAPE and performance benchmarks.
-- Forecast Streamlit page and CSV/XLSX exports.
-- docs/methods.md forecasting explanation.
-- Practitioner interviews remain pending.
-
-### Next checkpoint
-Checkpoint 3: Model Selection & Additional Methods.
-
-Do not treat current individual-series WAPE as
-proof of Gate 3 acceptance.

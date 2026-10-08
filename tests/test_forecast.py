@@ -12,6 +12,8 @@ from src.forecast import (
 
 from src.forecast import backtest_baseline, summarize_backtest
 
+from src.forecast import select_baseline_method
+
 def make_weekly(quantities, weeks=None):
     if weeks is None:
         weeks = pd.date_range(
@@ -221,3 +223,65 @@ def test_evaluation_end_must_be_monday():
         backtest_baseline(
             series, "naive", "2026-06-23"
         )
+
+
+def test_selection_identical_folds():
+    series = make_weekly([10] * 24)
+
+    result = select_baseline_method(
+        series, series["week_start"].max()
+    )
+
+    assert result["method"] == "naive"
+    assert result["compared_folds"] == [1, 2, 3, 4]
+    assert len(result["scores"]) == 3
+    assert all(
+        type(fold) is int
+        for fold in result["compared_folds"]
+    )
+
+
+def test_selection_intersects_unequal_fold_coverage():
+    series = make_weekly([10] * 24)
+
+    # Week 6 missing: some early moving-average
+    # training windows become ineligible.
+    series = series.drop(index=5)
+
+    result = select_baseline_method(
+        series, series["week_start"].max()
+    )
+
+    assert result["compared_folds"] == [3, 4]
+    assert all(
+        score["folds_evaluated"] == 2
+        for score in result["scores"]
+    )
+
+
+def test_zero_actual_selection_returns_na():
+    series = make_weekly([0] * 24)
+
+    result = select_baseline_method(
+        series, series["week_start"].max()
+    )
+
+    assert result["method"] is None
+    assert result["wape_pct"] is None
+    assert result["reason"] is not None
+
+
+def test_direct_ma4_rejects_calendar_gap():
+    weeks = pd.to_datetime([
+        "2026-01-05",
+        "2026-01-12",
+        "2026-01-26",
+        "2026-02-02",
+    ])
+
+    series = make_weekly(
+        [100, 120, 130, 140], weeks
+    )
+
+    with pytest.raises(ForecastError):
+        baseline_forecast(series, "ma4", 4)
