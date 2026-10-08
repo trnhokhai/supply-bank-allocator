@@ -1261,3 +1261,49 @@ If an accepted decision is later changed:
 2. mark it superseded;
 3. reference the new decision;
 4. explain why the change was necessary.
+
+---
+
+# Decision 036 — Calendar-Aligned Forecast Backtesting
+
+**Status:** Accepted
+
+### Decision
+
+Use rolling-origin backtesting with four folds
+and a four-calendar-week forecast horizon.
+
+Missing site activity must not be converted
+into zero distribution.
+
+Valid imputed product-size zeros may be used
+when the partner site was active.
+
+WAPE is pooled across valid evaluation observations.
+Bias is signed: positive means overforecasting.
+
+A missing or zero actual denominator must not
+produce a fabricated WAPE score.
+
+### Rationale
+
+Calendar alignment prevents evaluating a forecast
+against the wrong future dates.
+
+Correct treatment of missing activity avoids
+artificially lowering estimated demand.
+
+### Consequence
+
+Future method selection must compare models
+using equivalent historical evaluation windows.
+
+Models with different valid-fold coverage must
+not be ranked by raw WAPE without a fair comparison.
+
+Network-level WAPE requires separate validation.
+
+The final hierarchy and selection policy remain
+open decisions for later Week 3 checkpoints.
+
+---

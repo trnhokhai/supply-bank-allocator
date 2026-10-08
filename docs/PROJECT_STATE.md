@@ -820,3 +820,160 @@ Before implementation, the new chat should summarize:
 5. exact next implementation checkpoint.
 
 Khai should verify that summary before new code is written.
+
+
+---
+
+## 17. Week 3 — Forecasting Progress (October 8, 2026)
+
+
+### Current status
+
+**Gate:** Week 3 — Forecasting Engine
+**Overall status:** In progress
+**Next checkpoint:** Checkpoint 3 — Model Selection
+
+#### Checkpoint 0 — Forecasting Data Contract & Handoff
+
+Status: Foundation verified.
+
+Completed:
+- Reviewed Week 2 repository and handoff.
+- Confirmed `weekly_distribution` as primary modeling input.
+- Confirmed `inactive_spans` and `site_master` as supporting inputs.
+- Preserved `is_imputed_zero` semantics.
+- Confirmed 8 observed site weeks as the cold-start threshold.
+- Reproduced the Week 2 test suite: 140 passed.
+- Confirmed Git working tree was clean before Week 3.
+
+Pending architectural decision:
+- Site-total versus site-product top-down hierarchy.
+- Evaluate during Checkpoint 4 before locking the decision.
+
+#### Checkpoint 1 — Baseline Forecasting
+
+Status: Completed; further hardening may be required.
+
+Implemented:
+- `src/forecast.py`
+- `tests/test_forecast.py`
+- Naive forecasting.
+- Four-week moving average (MA4).
+- Eight-week moving average (MA8).
+- Historical series preparation and validation.
+- Initial baseline eligibility logic.
+
+Evidence:
+- Forecast tests: 9 passed.
+- Full suite: 149 passed.
+- Tested with actual Week 2 synthetic data.
+- SITE_001 / diaper / size 5:
+  - 78 historical records.
+  - 0 imputed-zero records.
+  - MA4 forecast: 461.25 units per week.
+
+#### Checkpoint 2 — Rolling-Origin Backtesting
+
+Status: Baseline backtesting implemented and
+individual-series validation completed.
+
+Implemented:
+- Four-fold rolling-origin backtesting.
+- Four-calendar-week evaluation horizons.
+- Calendar-aware method eligibility.
+- WAPE calculation.
+- Signed forecast bias.
+- Explicit handling of undefined WAPE.
+- Skipping invalid evaluation folds.
+- Tests for inactive gaps and imputed zeros.
+
+Evidence:
+- Forecast tests: 17 passed.
+- Full suite: 157 passed.
+- Fixed pandas timedelta deprecation warnings.
+- SITE_001 / diaper / size 5:
+  - Naive WAPE: 15.88%.
+  - MA4 WAPE: 16.57%.
+  - MA8 WAPE: 18.26%.
+  - All three methods: 4 valid folds, 16 test weeks.
+
+Important:
+- Naive is best only among these three methods
+  for this specific series.
+- Network-level WAPE has not been validated.
+- Model selection and cross-series comparison
+  remain pending.
+- Direct baseline calendar validation may require
+  additional hardening.
+
+#### Checkpoint 3 — Model Selection
+
+Status: Not started.
+
+Next:
+- Comparable-fold model ranking.
+- WAPE and bias selection policy.
+- Additional candidate methods.
+- Sparse-history handling.
+- Targeted tests and performance checks.
+
+**Gate 3 has NOT yet passed.**
+
+### Implemented
+- src/forecast.py: baseline forecasting and rolling-origin backtesting.
+- tests/test_forecast.py: forecasting tests.
+- Naive, MA4, MA8 candidate methods.
+- Calendar-aware moving-average eligibility.
+- Four-fold, four-week rolling-origin backtesting.
+- Pooled WAPE and signed percentage bias.
+- Explicit N/A for undefined WAPE.
+- Existing Week 2 data contracts preserved.
+
+### Test evidence
+- Forecast tests: 17 passed.
+- Full suite: 157 passed.
+- Previous pandas Timedelta deprecation warnings
+  addressed using standard-library timedelta and
+  calendar-day comparison.
+
+### Synthetic data validation
+Series: SITE_001 / diaper / size 5
+Historical records: 78
+Imputed zero records: 0
+Evaluation end: 2026-09-21
+Backtest: 4 folds, 4 weeks each
+
+Method | WAPE | Bias | Valid folds
+Naive  | 15.88% | -1.32% | 4/4
+MA4    | 16.57% | +2.68% | 4/4
+MA8    | 18.26% | +6.13% | 4/4
+
+Naive had the lowest WAPE for this individual series.
+These results DO NOT establish network-level Gate 3 WAPE.
+
+### Important safeguards
+- Forecasting consumes trusted Week 2 weekly data.
+- is_imputed_zero remains available.
+- Inactive site weeks are not assumed to have zero demand.
+- Pre-onboarding periods are not historical observations.
+- Cold-start threshold is 8 observed SITE-level weeks.
+- Model selection must compare equivalent evaluation folds.
+- Distribution quantity is a proxy for demand, not
+  necessarily unconstrained true demand.
+
+### Pending
+- Strengthen direct baseline forecasting validation.
+- Multi-series model selection and bias policy.
+- Additional forecasting methods.
+- Bottom-up versus top-down comparison.
+- Cold-start and prediction ranges.
+- Network-level WAPE and performance benchmarks.
+- Forecast Streamlit page and CSV/XLSX exports.
+- docs/methods.md forecasting explanation.
+- Practitioner interviews remain pending.
+
+### Next checkpoint
+Checkpoint 3: Model Selection & Additional Methods.
+
+Do not treat current individual-series WAPE as
+proof of Gate 3 acceptance.
