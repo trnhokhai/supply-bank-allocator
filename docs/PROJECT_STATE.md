@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 2, 2026
-**Current gate:** Week 2 closeout — Gate 2 technical acceptance met; practitioner outreach pending
+**Last updated:** October 8, 2026
+**Current gate:** Week 3 — Forecasting, Checkpoint 3A complete; Checkpoint 3B next
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 

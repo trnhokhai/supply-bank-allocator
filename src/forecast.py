@@ -103,7 +103,6 @@ def baseline_forecast(series, method, horizon=4):
             "valid historical observations."
         )
 
-    
     if "week_start" not in series.columns:
         raise ForecastError("Missing week_start column.")
 
