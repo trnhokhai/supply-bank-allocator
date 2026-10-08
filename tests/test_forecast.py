@@ -14,6 +14,16 @@ from src.forecast import backtest_baseline, summarize_backtest
 
 from src.forecast import select_baseline_method
 
+from src.forecast import (
+    eligible_smoothing,
+    smoothing_forecast,
+)
+
+from src.forecast import (
+    eligible_intermittent,
+    intermittent_forecast,
+)
+
 def make_weekly(quantities, weeks=None):
     if weeks is None:
         weeks = pd.date_range(
@@ -285,3 +295,192 @@ def test_direct_ma4_rejects_calendar_gap():
 
     with pytest.raises(ForecastError):
         baseline_forecast(series, "ma4", 4)
+
+
+# ---------------------------------------------------------
+# Checkpoint 3B.1 tests
+# ---------------------------------------------------------
+
+def test_ses_constant_demand():
+    series = make_weekly([100] * 16)
+
+    result = smoothing_forecast(series, "ses", 4)
+
+    assert len(result) == 4
+    np.testing.assert_allclose(result, [100] * 4, atol=1)
+
+
+def test_damped_holt_positive_trend():
+    series = make_weekly(
+        [100 + 10 * i for i in range(20)]
+    )
+
+    result = smoothing_forecast(
+        series, "damped_holt", 4
+    )
+
+    assert len(result) == 4
+    assert np.isfinite(result).all()
+    assert (result >= 0).all()
+    assert result[0] > 100
+
+
+def test_smoothing_method_eligibility():
+    assert eligible_smoothing(
+        make_weekly([100] * 7)
+    ) == []
+
+    assert eligible_smoothing(
+        make_weekly([100] * 8)
+    ) == ["ses"]
+
+    assert eligible_smoothing(
+        make_weekly([100] * 12)
+    ) == ["ses", "damped_holt"]
+
+
+def test_smoothing_does_not_cross_inactive_gap():
+    series = make_weekly([100] * 20)
+
+    # Removing week 13 leaves only 7 recent
+    # consecutive weeks in this history.
+    series = series.drop(index=12)
+
+    assert eligible_smoothing(series) == []
+
+    with pytest.raises(ForecastError):
+        smoothing_forecast(series, "ses", 4)
+
+
+def test_old_history_before_gap_cannot_affect_forecast():
+    series = make_weekly([100] * 24)
+    series = series.drop(index=10)
+
+    altered = series.copy()
+    altered.loc[
+        altered.index < 10, "quantity"
+    ] = 10000
+
+    original_result = smoothing_forecast(
+        series, "ses", 4
+    )
+
+    altered_result = smoothing_forecast(
+        altered, "ses", 4
+    )
+
+    np.testing.assert_allclose(
+        original_result, altered_result
+    )
+
+
+def test_smoothing_keeps_valid_imputed_zero():
+    series = make_weekly([100] * 16)
+
+    series.loc[12, "quantity"] = 0
+    series.loc[12, "is_imputed_zero"] = True
+
+    result = smoothing_forecast(
+        series, "ses", 4
+    )
+
+    assert len(result) == 4
+    assert np.isfinite(result).all()
+    assert (result >= 0).all()
+
+
+def test_smoothing_invalid_horizon():
+    series = make_weekly([100] * 16)
+
+    with pytest.raises(ForecastError):
+        smoothing_forecast(series, "ses", 9)
+
+
+# ---------------------------------------------------------
+# Checkpoint 3B.2 tests
+# ---------------------------------------------------------
+
+def intermittent_sample():
+    return make_weekly([0, 25, 0, 0] * 6)
+
+
+def test_intermittent_methods_eligible():
+    series = intermittent_sample()
+
+    assert eligible_intermittent(series) == [
+        "croston", "tsb"
+    ]
+
+
+def test_regular_distribution_not_intermittent():
+    series = make_weekly([100] * 24)
+
+    assert eligible_intermittent(series) == []
+
+
+def test_single_positive_observation_insufficient():
+    series = make_weekly([0] * 23 + [25])
+
+    assert eligible_intermittent(series) == []
+
+
+def test_croston_forecast_valid():
+    result = intermittent_forecast(
+        intermittent_sample(), "croston", 4
+    )
+
+    assert len(result) == 4
+    assert np.isfinite(result).all()
+    assert (result >= 0).all()
+
+
+def test_tsb_forecast_valid():
+    result = intermittent_forecast(
+        intermittent_sample(), "tsb", 4
+    )
+
+    assert len(result) == 4
+    assert np.isfinite(result).all()
+    assert (result >= 0).all()
+
+
+def test_inactive_gap_breaks_eligibility():
+    series = make_weekly([0, 25, 0, 0] * 5)
+
+    # Only 9 recent consecutive weeks remain.
+    series = series.drop(index=10)
+
+    assert eligible_intermittent(series) == []
+
+    with pytest.raises(ForecastError):
+        intermittent_forecast(series, "tsb", 4)
+
+
+def test_old_pre_gap_values_do_not_affect_tsb():
+    series = make_weekly([0, 25, 0, 0] * 7)
+    series = series.drop(index=10)
+
+    changed = series.copy()
+    changed.loc[
+        changed.index < 10, "quantity"
+    ] = 10000
+
+    original_result = intermittent_forecast(
+        series, "tsb", 4
+    )
+
+    changed_result = intermittent_forecast(
+        changed, "tsb", 4
+    )
+
+    np.testing.assert_allclose(
+        original_result,
+        changed_result,
+    )
+
+
+def test_intermittent_invalid_horizon():
+    with pytest.raises(ForecastError):
+        intermittent_forecast(
+            intermittent_sample(), "croston", 9
+        )

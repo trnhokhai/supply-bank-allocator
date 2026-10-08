@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** October 8, 2026
-**Current gate:** Week 3 — Forecasting, Checkpoint 3A complete; Checkpoint 3B next
+**Current gate:** Week 3 — Forecasting, Checkpoint 3B complete; Checkpoint 3C next
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -831,7 +831,7 @@ Khai should verify that summary before new code is written.
 
 **Gate:** Week 3 — Forecasting Engine
 **Overall status:** In progress
-**Next checkpoint:** Checkpoint 3 — Model Selection
+**Next checkpoint:** Checkpoint 3C — Full Model Selection
 
 #### Checkpoint 0 — Forecasting Data Contract & Handoff
 
@@ -941,15 +941,81 @@ Limitations:
   additional candidate methods are evaluated.
 - Network-level accuracy remains unverified.
 
+
 ##### Checkpoint 3B — Additional Forecast Methods
 
-Status: Not started.
+Status: Implementation completed and locally validated.
+Full seven-method backtesting integration is pending.
 
-Next:
-- Simple exponential smoothing.
-- Damped Holt trend.
-- Intermittent-demand forecasting (Croston/TSB).
-- Method eligibility and analytical tests.
+###### Checkpoint 3B.1 — Exponential Smoothing
+
+Implemented:
+- Simple Exponential Smoothing (SES).
+- Damped Holt trend using AutoETS.
+- Recent contiguous history selection.
+- Minimum eligible-history requirements.
+- Nonnegative and finite forecast validation.
+- Protection against crossing inactive gaps.
+
+Evidence:
+- Forecast tests: 28 passed.
+- Full suite: 168 passed.
+- SITE_001 / diaper / size 5:
+  - Historical records: 78.
+  - Both smoothing methods eligible.
+  - SES four-week forecast: 477.47 units/week.
+  - Damped Holt: approximately 467.37 to 467.40
+    units/week.
+
+###### Checkpoint 3B.2 — Intermittent Demand
+
+Implemented:
+- CrostonOptimized.
+- TSB with provisional alpha_d=0.2 and alpha_p=0.2.
+- Eligibility based on recent contiguous history.
+- Initial requirement: 16 consecutive weeks,
+  greater than 30% zero weeks, and at least
+  two positive observations.
+- Tests for inactive gaps, sparse data,
+  invalid horizons, and forecast validity.
+
+Evidence:
+- Forecast tests: 36 passed.
+- Full suite: 176 passed.
+- Real synthetic dataset:
+  - 10 intermittent-eligible series.
+  - Example: SITE_001 / period_cup / one_size.
+  - Historical records: 75.
+  - Zero-distribution share: approximately 66.7%.
+  - Croston forecast: approximately 2.92 units/week.
+  - TSB forecast: approximately 2.82 units/week.
+
+###### Checkpoint 3B Conclusions
+
+Seven forecasting candidates are implemented:
+1. Naive
+2. MA4
+3. MA8
+4. SES
+5. Damped Holt
+6. Croston
+7. TSB
+
+All seven have passed their relevant local tests.
+
+Important limitations:
+- SES, Holt, Croston, and TSB are not yet integrated
+  into the common rolling-origin model selector.
+- Additional methods have not been compared
+  against Naive/MA4/MA8 on common backtest folds.
+- Eligibility thresholds and TSB smoothing
+  parameters are provisional.
+- Forecast accuracy and runtime for the full
+  network are not yet verified.
+- No method is globally approved as the winner.
+
+Next: Checkpoint 3C — Full Model Selection.
+
 
 ##### Checkpoint 3C — Full Model Selection
 

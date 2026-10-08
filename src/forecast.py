@@ -4,6 +4,12 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
+from statsforecast.models import (
+    AutoETS,
+    CrostonOptimized,
+    SimpleExponentialSmoothingOptimized,
+    TSB,
+)
 
 class ForecastError(ValueError):
     """Raised when a forecasting input cannot be used safely."""
@@ -467,3 +473,238 @@ def select_baseline_method(
         "reason": None,
     }
 
+
+# ---------------------------------------------------------
+# Checkpoint 3B — Exponential smoothing candidates
+# ---------------------------------------------------------
+
+SMOOTHING_MIN_WEEKS = {
+    "ses": 8,
+    "damped_holt": 12,
+}
+
+
+def _recent_contiguous_history(series):
+    """
+    Return the most recent uninterrupted site/product/size history.
+
+    A missing calendar week breaks the historical segment.
+    Never manufacture zero-demand weeks across inactive gaps.
+    """
+    if series.empty:
+        raise ForecastError("Cannot forecast an empty series.")
+
+    first = series.iloc[0]
+
+    history = prepare_forecast_series(
+        series,
+        first["site_id"],
+        first["product"],
+        first["size"],
+    )
+
+    if len(history) != len(series):
+        raise ForecastError(
+            "Forecasting requires exactly one product-size series."
+        )
+
+    gaps = history["week_start"].diff().dt.days.ne(7)
+
+    last_start = int(
+        np.flatnonzero(gaps.to_numpy())[-1]
+    )
+
+    return history.iloc[last_start:].copy()
+
+
+def eligible_smoothing(series):
+    """
+    Determine which smoothing models have enough
+    consecutive calendar history.
+    """
+    history = _recent_contiguous_history(series)
+    count = len(history)
+
+    return [
+        method
+        for method, minimum in SMOOTHING_MIN_WEEKS.items()
+        if count >= minimum
+    ]
+
+
+def smoothing_forecast(series, method, horizon=4):
+    """
+    Produce SES or damped Holt forecasts.
+
+    Only the most recent consecutive historical segment
+    is fitted. Missing site activity is never filled with zero.
+
+    SES: optimized simple exponential smoothing.
+    Damped Holt: additive level/trend with trend damping.
+    """
+    if type(horizon) is not int or not 4 <= horizon <= 8:
+        raise ForecastError(
+            "Horizon must be an integer from 4 to 8."
+        )
+
+    if method not in SMOOTHING_MIN_WEEKS:
+        raise ForecastError(
+            f"Unknown smoothing method: {method}"
+        )
+
+    history = _recent_contiguous_history(series)
+
+    minimum = SMOOTHING_MIN_WEEKS[method]
+
+    if len(history) < minimum:
+        raise ForecastError(
+            f"{method} requires at least {minimum} "
+            "consecutive historical weeks."
+        )
+
+    values = history["quantity"].to_numpy(dtype=float)
+
+    try:
+        if method == "ses":
+            model = SimpleExponentialSmoothingOptimized()
+        else:
+            model = AutoETS(
+                season_length=1,
+                model="AAN",
+                damped=True,
+            )
+
+        result = model.forecast(y=values, h=horizon)
+
+        predictions = np.asarray(
+            result["mean"], dtype=float
+        )
+
+    except (
+        ValueError,
+        RuntimeError,
+        FloatingPointError,
+        OverflowError,
+        np.linalg.LinAlgError,
+    ) as exc:
+        raise ForecastError(
+            f"{method} could not fit the historical data: {exc}"
+        ) from exc
+
+    if (
+        predictions.shape != (horizon,)
+        or not np.isfinite(predictions).all()
+    ):
+        raise ForecastError(
+            f"{method} produced invalid forecast values."
+        )
+
+    # Physical distribution units cannot be negative.
+    return np.maximum(predictions, 0.0)
+
+
+# ---------------------------------------------------------
+# Checkpoint 3B.2 — Intermittent demand candidates
+# ---------------------------------------------------------
+
+INTERMITTENT_MIN_WEEKS = 16
+INTERMITTENT_ZERO_THRESHOLD = 0.30
+
+
+def eligible_intermittent(series):
+    """
+    Eligible when recent contiguous history has:
+    - at least 16 weeks;
+    - more than 30% zero-distribution weeks;
+    - at least two positive observations.
+
+    These are model-eligibility rules, not the
+    site's eight-week cold-start rule.
+    """
+    history = _recent_contiguous_history(series)
+
+    if len(history) < INTERMITTENT_MIN_WEEKS:
+        return []
+
+    values = history["quantity"].to_numpy(dtype=float)
+
+    zero_share = float(np.mean(values == 0))
+    positive_count = int(np.count_nonzero(values > 0))
+
+    if (
+        zero_share <= INTERMITTENT_ZERO_THRESHOLD
+        or positive_count < 2
+    ):
+        return []
+
+    return ["croston", "tsb"]
+
+
+def intermittent_forecast(series, method, horizon=4):
+    """
+    Forecast intermittent weekly distributions.
+
+    Uses recent contiguous history only.
+    Missing inactive-site weeks are never filled.
+    """
+    if type(horizon) is not int or not 4 <= horizon <= 8:
+        raise ForecastError(
+            "Horizon must be an integer from 4 to 8."
+        )
+
+    if method not in {"croston", "tsb"}:
+        raise ForecastError(
+            f"Unknown intermittent method: {method}"
+        )
+
+    history = _recent_contiguous_history(series)
+
+    if method not in eligible_intermittent(history):
+        raise ForecastError(
+            f"{method} requires sufficient consecutive "
+            "intermittent history with multiple "
+            "positive observations."
+        )
+
+    values = history["quantity"].to_numpy(dtype=float)
+
+    try:
+        if method == "croston":
+            model = CrostonOptimized()
+        else:
+            model = TSB(
+                alpha_d=0.2,
+                alpha_p=0.2,
+            )
+
+        result = model.forecast(
+            y=values,
+            h=horizon,
+        )
+
+        predictions = np.asarray(
+            result["mean"],
+            dtype=float,
+        )
+
+    except (
+        ValueError,
+        RuntimeError,
+        FloatingPointError,
+        OverflowError,
+        ZeroDivisionError,
+        np.linalg.LinAlgError,
+    ) as exc:
+        raise ForecastError(
+            f"{method} could not fit the data: {exc}"
+        ) from exc
+
+    if (
+        predictions.shape != (horizon,)
+        or not np.isfinite(predictions).all()
+    ):
+        raise ForecastError(
+            f"{method} produced invalid forecast values."
+        )
+
+    return np.maximum(predictions, 0.0)
