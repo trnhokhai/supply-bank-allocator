@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** October 9, 2026
-**Current gate:** Week 3 — Forecasting, Checkpoint 4B validated; Checkpoint 4C next
+**Current gate:** Week 3 — CP5D diagnostic validated; final tests and Forecast Page next
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1158,17 +1158,152 @@ Important limitations:
 - Independent final network accuracy is not yet measured.
 - Gate 3 WAPE and full workflow runtime are not yet certified.
 
+
 ### Checkpoint 4C — Production Forecast Contract
 
-Status: Not started.
+Status: Provisional implementation completed and validated.
+Cold-start, prediction bands, and final accuracy remain pending.
+
+Implemented:
+- src/forecast_output.py
+- tests/test_forecast_output.py
+- run_cp4c.py
+- Site-total top-down forecast generation.
+- Canonical Site x Product x Size x Week output.
+- Parent-level method selection and accuracy metadata.
+- Explicit separation of parent WAPE and child WAPE.
+- Quality flags for stale or missing child history.
+- Site-level eight-week history eligibility.
+- Explicit issues for missing site activity or cold-start.
+- Nonnegative, finite forecast output validation.
+
+Evidence:
+- Forecast tests: 9 passed.
+- Full suite: 203 passed.
+- Synthetic forecast origin: 2026-09-21.
+- Partner sites: 25.
+- Distinct product-size series: 341.
+- Forecast horizon: 4 weeks.
+- Forecast records: 1,364.
+- Flagged forecast rows: 88 (22 child series).
+- Execution issues: 0.
+- Forecast generation runtime: 3.27 seconds.
+
+Parent method distribution:
+- Naive: 8 sites.
+- SES: 7 sites.
+- MA8: 5 sites.
+- Damped Holt: 4 sites.
+- MA4: 1 site.
+
+Output contract:
+- forecast_units: Expected weekly individual units.
+- method: Selected site-level forecasting method.
+- method_level: site_total.
+- parent_wape_pct: Historical site-level backtest error.
+- wape_pct: N/A pending child-level evaluation.
+- quality_flags: Identified limitations requiring review.
+- forecast_status: provisional_cp4c.
+
+Important:
+- Forecast quantities remain fractional before allocation.
+- Zero historical mix weights do not prove zero true demand.
+- Final synthetic origin has no site-level issues,
+  but historical cold-start cutoffs remain untested.
+- This is not final Gate 3 acceptance.
+- Network-level independent WAPE remains unverified.
+- Final end-to-end runtime remains unverified.
 
 Next:
-- Define final weekly forecast output schema.
-- Integrate the preferred hierarchy into forecast generation.
-- Preserve product-size identity and unit conservation.
-- Include method, forecast source, error and warning fields.
-- Define missing/stale-history handling for Checkpoint 5.
-- Ensure outputs are usable by the future allocation engine.
+Checkpoint 5 — Cold-start, stale-history fallback,
+and prediction bands.
 
 Gate 3 remains IN PROGRESS.
 
+
+### Checkpoint 4C — Production Forecast Contract
+
+Status: Provisional implementation validated.
+
+- 9 new tests passed; 203 full-suite tests passed.
+- Forecasts generated: 1,364 rows.
+- Coverage: 25 sites, 341 product-size series.
+- Forecast horizon tested: 4 weeks.
+- Quality review: 88 flagged rows.
+- Execution issues: 0.
+- Generation runtime: 3.27 seconds.
+- Parent-level WAPE is separate from child-level WAPE.
+- Final accuracy certification remains pending.
+
+---
+
+## 19. Week 3 — Checkpoint 5: Cold Start and Ranges
+
+### Checkpoint 5A — Historical Threshold
+
+Status: Validated.
+
+- SITE_024 and SITE_025 tested at historical cutoffs.
+- Seven observed site weeks: cold-start eligible.
+- Eight observed site weeks: historical method eligible.
+- Site-level history count is used, not positive
+  observations for each individual product-size.
+
+### Checkpoint 5B — Survey-Based Forecasting
+
+Status: Implementation and diagnostics validated.
+
+- src/cold_start.py implemented.
+- 12 cold-start tests passed.
+- Full suite at CP5B: 215 passed.
+- SITE_024: 822.45 estimated units/week.
+- SITE_025: 990.97 estimated units/week.
+- Forecast method: survey_based.
+- WAPE: N/A, with explanation.
+- Synthetic undated survey used for explicitly
+  labeled retrospective demonstration only.
+
+### Checkpoint 5C — Unified Forecast Pipeline
+
+Status: Implementation and diagnostics validated.
+
+- src/forecast_pipeline.py implemented.
+- 9 integration tests passed.
+- Full suite at CP5C: 224 passed.
+- Historical and survey routing integrated.
+- Current network: 25 historical sites.
+- Forecast output: 1,364 rows.
+- Unresolved site issues: 0.
+- Review-required rows: 88.
+- No fabricated child-level WAPE.
+
+### Checkpoint 5D — Plausible Ranges
+
+Status: Network diagnostic completed.
+Final automated-test confirmation pending.
+
+- src/prediction_bands.py implemented.
+- Nominal 80% plausible ranges from historical
+  child-level backtest residuals.
+- Forecast rows: 1,364.
+- Rows with ranges: 1,276.
+- Rows without ranges: 88.
+- Child series with ranges: 319 of 341.
+- Child series without ranges: 22.
+- End-to-end diagnostic runtime: 6.415 seconds.
+
+Important:
+- 93.5% range availability is NOT 80% empirical coverage.
+- The 80% nominal coverage has not been independently validated.
+- Stale or zero-mix child forecasts require review.
+- Survey-based forecasts must retain WAPE N/A.
+- Do not interpret a zero forecast as proven zero demand.
+- Independent network-level WAPE is still pending.
+
+### Next Steps
+
+1. Checkpoint 6 — Forecast Streamlit Page.
+2. Checkpoint 7 — Gate 3 acceptance and methods note.
+3. Final Week 3 handoff for Week 4 allocation work.
+
+Gate 3 remains IN PROGRESS.
