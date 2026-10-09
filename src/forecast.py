@@ -188,119 +188,21 @@ BACKTEST_COLUMNS = [
 ]
 
 
+
 def backtest_baseline(
     series,
     method,
     evaluation_end_week,
     folds=4,
 ):
-    """
-    Rolling-origin backtest with four-week calendar horizons.
-
-    All series can share the same evaluation_end_week,
-    keeping network-level evaluation windows aligned.
-
-    Missing evaluation weeks invalidate a fold.
-    No missing site weeks are converted to zero.
-    """
+    """Backward-compatible baseline backtesting interface."""
     if method not in {"naive", "ma4", "ma8"}:
-        raise ForecastError(f"Unknown method: {method}")
+        raise ForecastError(f"Unknown baseline method: {method}")
 
-    if type(folds) is not int or folds < 1:
-        raise ForecastError("folds must be a positive integer.")
-
-    if series.empty:
-        raise ForecastError("Cannot backtest an empty series.")
-
-    identifiers = ["site_id", "product", "size"]
-
-    if not set(identifiers).issubset(series.columns):
-        raise ForecastError("Missing series identifiers.")
-
-    first = series.iloc[0]
-
-    history = prepare_forecast_series(
-        series,
-        first["site_id"],
-        first["product"],
-        first["size"],
+    return backtest_forecast(
+        series, method, evaluation_end_week, folds=folds
     )
 
-    if len(history) != len(series):
-        raise ForecastError(
-            "Backtesting requires exactly one product-size series."
-        )
-
-    try:
-        end_week = pd.Timestamp(evaluation_end_week)
-    except (TypeError, ValueError):
-        raise ForecastError("Invalid evaluation end week.")
-
-    if pd.isna(end_week) or end_week.weekday() != 0:
-        raise ForecastError(
-            "Evaluation end must be a valid ISO-week Monday."
-        )
-
-    records = []
-    horizon = 4
-
-    for fold in range(1, folds + 1):
-        weeks_before_end = horizon * (folds - fold + 1) - 1
-
-        test_start = end_week - timedelta(
-        days=7 * weeks_before_end
-        )
-        origin = test_start - timedelta(days=7)
-
-        expected_weeks = pd.date_range(
-            start=test_start,
-            periods=horizon,
-            freq="W-MON",
-        )
-
-        train = history.loc[
-            history["week_start"] <= origin
-        ].copy()
-
-        actual = history.loc[
-            history["week_start"].isin(expected_weeks)
-        ].copy()
-
-        # All four actual calendar weeks must exist.
-        if (
-            len(actual) != horizon
-            or actual["week_start"].tolist()
-            != list(expected_weeks)
-        ):
-            continue
-
-        # Require a valid observation at the forecast origin.
-        if train.empty or train["week_start"].iloc[-1] != origin:
-            continue
-
-        if method not in eligible_baselines(train):
-            continue
-
-        predictions = baseline_forecast(
-            train, method, horizon
-        )
-
-        for index, actual_row in enumerate(
-            actual.itertuples(index=False)
-        ):
-            records.append({
-                "fold": fold,
-                "method": method,
-                "origin_week": origin,
-                "week_start": actual_row.week_start,
-                "actual_units": float(actual_row.quantity),
-                "forecast_units": float(predictions[index]),
-                "is_imputed_zero": bool(
-                    actual_row.is_imputed_zero
-                ),
-            })
-
-    return pd.DataFrame(records, columns=BACKTEST_COLUMNS)
 
 
 def summarize_backtest(rows, method):
@@ -708,3 +610,292 @@ def intermittent_forecast(series, method, horizon=4):
         )
 
     return np.maximum(predictions, 0.0)
+
+
+# ---------------------------------------------------------
+# Checkpoint 3C — Unified forecasting and model selection
+# ---------------------------------------------------------
+
+FORECAST_METHODS = (
+    "naive", "ma4", "ma8",
+    "ses", "damped_holt",
+    "croston", "tsb",
+)
+
+
+def forecast_with_method(series, method, horizon=4):
+    """Dispatch an eligible forecast to the correct model."""
+    if method in {"naive", "ma4", "ma8"}:
+        return baseline_forecast(series, method, horizon)
+
+    if method in {"ses", "damped_holt"}:
+        return smoothing_forecast(series, method, horizon)
+
+    if method in {"croston", "tsb"}:
+        return intermittent_forecast(series, method, horizon)
+
+    raise ForecastError(f"Unknown forecast method: {method}")
+
+
+def _eligible_for_method(series, method):
+    """Check eligibility using training history only."""
+    if method in {"naive", "ma4", "ma8"}:
+        return method in eligible_baselines(series)
+
+    if method in {"ses", "damped_holt"}:
+        return method in eligible_smoothing(series)
+
+    if method in {"croston", "tsb"}:
+        return method in eligible_intermittent(series)
+
+    return False
+
+
+def backtest_forecast(
+    series,
+    method,
+    evaluation_end_week,
+    folds=4,
+):
+    """
+    Calendar-aligned rolling-origin backtest for all methods.
+
+    Forecasts use only data available at their historical
+    origin. Missing evaluation weeks invalidate a fold.
+    """
+    if method not in FORECAST_METHODS:
+        raise ForecastError(f"Unknown forecast method: {method}")
+
+    if type(folds) is not int or folds < 1:
+        raise ForecastError("folds must be a positive integer.")
+
+    if series.empty:
+        raise ForecastError("Cannot backtest an empty series.")
+
+    first = series.iloc[0]
+
+    history = prepare_forecast_series(
+        series,
+        first["site_id"],
+        first["product"],
+        first["size"],
+    )
+
+    if len(history) != len(series):
+        raise ForecastError(
+            "Backtesting requires one product-size series."
+        )
+
+    try:
+        end_week = pd.Timestamp(evaluation_end_week)
+    except (TypeError, ValueError) as exc:
+        raise ForecastError(
+            "Invalid evaluation end week."
+        ) from exc
+
+    if pd.isna(end_week) or end_week.weekday() != 0:
+        raise ForecastError(
+            "Evaluation end must be an ISO-week Monday."
+        )
+
+    records = []
+    horizon = 4
+
+    for fold in range(1, folds + 1):
+        weeks_before_end = (
+            horizon * (folds - fold + 1) - 1
+        )
+
+        test_start = end_week - timedelta(
+            days=7 * weeks_before_end
+        )
+        origin = test_start - timedelta(days=7)
+
+        expected_weeks = pd.date_range(
+            start=test_start,
+            periods=horizon,
+            freq="W-MON",
+        )
+
+        train = history.loc[
+            history["week_start"] <= origin
+        ].copy()
+
+        actual = history.loc[
+            history["week_start"].isin(expected_weeks)
+        ].copy()
+
+        if (
+            len(actual) != horizon
+            or actual["week_start"].tolist()
+            != list(expected_weeks)
+        ):
+            continue
+
+        if (
+            train.empty
+            or train["week_start"].iloc[-1] != origin
+        ):
+            continue
+
+        if not _eligible_for_method(train, method):
+            continue
+
+        try:
+            predictions = forecast_with_method(
+                train, method, horizon
+            )
+        except ForecastError:
+            # An individual candidate may be unable to fit
+            # a historical window. Other methods remain usable.
+            continue
+
+        for i, row in enumerate(
+            actual.itertuples(index=False)
+        ):
+            records.append({
+                "fold": fold,
+                "method": method,
+                "origin_week": origin,
+                "week_start": row.week_start,
+                "actual_units": float(row.quantity),
+                "forecast_units": float(predictions[i]),
+                "is_imputed_zero": bool(
+                    row.is_imputed_zero
+                ),
+            })
+
+    return pd.DataFrame(
+        records, columns=BACKTEST_COLUMNS
+    )
+
+
+def select_forecast_method(
+    series,
+    evaluation_end_week,
+    folds=4,
+    min_valid_folds=2,
+):
+    """
+    Select from all seven methods using comparable folds.
+
+    Prefer the largest valid historical evaluation window.
+    Compare only candidates covering that exact window.
+
+    WAPE is primary; absolute bias breaks WAPE ties.
+    Bias above 10% is explicitly flagged for review.
+    """
+    if (
+        type(folds) is not int
+        or folds < 1
+        or type(min_valid_folds) is not int
+        or not 1 <= min_valid_folds <= folds
+    ):
+        raise ForecastError("Invalid fold requirements.")
+
+    results = {
+        method: backtest_forecast(
+            series,
+            method,
+            evaluation_end_week,
+            folds=folds,
+        )
+        for method in FORECAST_METHODS
+    }
+
+    fold_sets = {
+        method: tuple(
+            sorted(int(f) for f in rows["fold"].unique())
+        )
+        for method, rows in results.items()
+    }
+
+    possible = [
+        value for value in fold_sets.values()
+        if len(value) >= min_valid_folds
+    ]
+
+    if not possible:
+        return {
+            "method": None,
+            "wape_pct": None,
+            "bias_pct": None,
+            "bias_flag": None,
+            "compared_folds": [],
+            "scores": [],
+            "reason": "Insufficient backtest history.",
+        }
+
+    # Favor maximum calendar coverage; break ties toward
+    # the most recent set of folds.
+    comparison_folds = max(
+        possible,
+        key=lambda value: (len(value), value),
+    )
+
+    scores = []
+
+    for method in FORECAST_METHODS:
+        method_folds = fold_sets[method]
+
+        comparable = method_folds == comparison_folds
+
+        if comparable:
+            metrics = summarize_backtest(
+                results[method], method
+            )
+
+            wape = metrics["wape_pct"]
+            bias = metrics["bias_pct"]
+        else:
+            wape = None
+            bias = None
+
+        scores.append({
+            "method": method,
+            "wape_pct": wape,
+            "bias_pct": bias,
+            "bias_flag": (
+                abs(bias) > 10
+                if bias is not None else None
+            ),
+            "available_folds": list(method_folds),
+            "compared": comparable,
+        })
+
+    ranked = [
+        score for score in scores
+        if score["compared"]
+        and score["wape_pct"] is not None
+        and score["bias_pct"] is not None
+    ]
+
+    if not ranked:
+        return {
+            "method": None,
+            "wape_pct": None,
+            "bias_pct": None,
+            "bias_flag": None,
+            "compared_folds": list(comparison_folds),
+            "scores": scores,
+            "reason": "WAPE undefined for comparable folds.",
+        }
+
+    winner = min(
+        ranked,
+        key=lambda score: (
+            score["wape_pct"],
+            abs(score["bias_pct"]),
+            FORECAST_METHODS.index(score["method"]),
+        ),
+    )
+
+    return {
+        "method": winner["method"],
+        "wape_pct": winner["wape_pct"],
+        "bias_pct": winner["bias_pct"],
+        "bias_flag": winner["bias_flag"],
+        "compared_folds": list(comparison_folds),
+        "scores": scores,
+        "reason": None,
+    }

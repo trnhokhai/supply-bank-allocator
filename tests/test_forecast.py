@@ -24,6 +24,12 @@ from src.forecast import (
     intermittent_forecast,
 )
 
+from src.forecast import (
+    backtest_forecast,
+    forecast_with_method,
+    select_forecast_method,
+)
+
 def make_weekly(quantities, weeks=None):
     if weeks is None:
         weeks = pd.date_range(
@@ -484,3 +490,89 @@ def test_intermittent_invalid_horizon():
         intermittent_forecast(
             intermittent_sample(), "croston", 9
         )
+
+
+# ---------------------------------------------------------
+# Checkpoint 3C.1 tests
+# ---------------------------------------------------------
+
+def test_unified_backtest_preserves_baseline_behavior():
+    series = make_weekly(list(range(1, 25)))
+    end_week = series["week_start"].max()
+
+    old = backtest_baseline(series, "ma4", end_week)
+    new = backtest_forecast(series, "ma4", end_week)
+
+    pd.testing.assert_frame_equal(old, new)
+
+
+def test_full_selector_on_constant_demand():
+    series = make_weekly([100] * 28)
+
+    result = select_forecast_method(
+        series, series["week_start"].max()
+    )
+
+    assert result["method"] in {
+        "naive", "ma4", "ma8", "ses", "damped_holt"
+    }
+    assert result["wape_pct"] == pytest.approx(
+        0.0, abs=0.001
+    )
+    assert result["compared_folds"] == [1, 2, 3, 4]
+
+
+def test_intermittent_methods_join_unified_backtest():
+    series = make_weekly([0, 25, 0, 0] * 10)
+    end_week = series["week_start"].max()
+
+    for method in ["croston", "tsb"]:
+        rows = backtest_forecast(
+            series, method, end_week
+        )
+
+        assert rows["fold"].nunique() == 4
+        assert len(rows) == 16
+        assert (rows["forecast_units"] >= 0).all()
+
+
+def test_unified_selector_handles_short_history():
+    series = make_weekly([10, 20, 30, 40])
+
+    result = select_forecast_method(
+        series, series["week_start"].max()
+    )
+
+    assert result["method"] is None
+    assert result["wape_pct"] is None
+    assert result["reason"] is not None
+
+
+def test_smoothing_backtest_does_not_use_future():
+    series = make_weekly([100 + i for i in range(40)])
+    end_week = series["week_start"].max()
+
+    original = backtest_forecast(series, "ses", end_week)
+
+    changed = series.copy()
+    changed.loc[
+        changed.index >= 36, "quantity"
+    ] = 10000
+
+    after_change = backtest_forecast(
+        changed, "ses", end_week
+    )
+
+    original_first = original.loc[
+        original["fold"] == 1, "forecast_units"
+    ].to_numpy()
+
+    changed_first = after_change.loc[
+        after_change["fold"] == 1, "forecast_units"
+    ].to_numpy()
+
+    assert len(original_first) == 4
+
+    np.testing.assert_allclose(
+        original_first, changed_first
+    )

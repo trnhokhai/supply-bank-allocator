@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** October 8, 2026
-**Current gate:** Week 3 — Forecasting, Checkpoint 3B complete; Checkpoint 3C next
+**Current gate:** Week 3 — Forecasting, Checkpoint 3C integration validated; Checkpoint 4 next
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -942,14 +942,16 @@ Limitations:
 - Network-level accuracy remains unverified.
 
 
+
 ##### Checkpoint 3B — Additional Forecast Methods
 
-Status: Implementation completed and locally validated.
-Full seven-method backtesting integration is pending.
+**Status:** Implementation completed and locally validated. Full seven-method backtesting integration is pending.
 
 ###### Checkpoint 3B.1 — Exponential Smoothing
 
-Implemented:
+**Status:** Completed and validated.
+
+**Implemented:**
 - Simple Exponential Smoothing (SES).
 - Damped Holt trend using AutoETS.
 - Recent contiguous history selection.
@@ -957,29 +959,30 @@ Implemented:
 - Nonnegative and finite forecast validation.
 - Protection against crossing inactive gaps.
 
-Evidence:
+**Evidence:**
 - Forecast tests: 28 passed.
 - Full suite: 168 passed.
 - SITE_001 / diaper / size 5:
   - Historical records: 78.
   - Both smoothing methods eligible.
   - SES four-week forecast: 477.47 units/week.
-  - Damped Holt: approximately 467.37 to 467.40
-    units/week.
+  - Damped Holt: approximately 467.37–467.40 units/week.
 
 ###### Checkpoint 3B.2 — Intermittent Demand
 
-Implemented:
-- CrostonOptimized.
-- TSB with provisional alpha_d=0.2 and alpha_p=0.2.
-- Eligibility based on recent contiguous history.
-- Initial requirement: 16 consecutive weeks,
-  greater than 30% zero weeks, and at least
-  two positive observations.
-- Tests for inactive gaps, sparse data,
-  invalid horizons, and forecast validity.
+**Status:** Completed and validated.
 
-Evidence:
+**Implemented:**
+- CrostonOptimized.
+- TSB with provisional `alpha_d=0.2` and `alpha_p=0.2`.
+- Eligibility based on recent contiguous history.
+- Initial eligibility requirement:
+  - At least 16 consecutive historical weeks.
+  - More than 30% zero-distribution weeks.
+  - At least two positive observations.
+- Tests for inactive gaps, sparse data, invalid horizons, and forecast validity.
+
+**Evidence:**
 - Forecast tests: 36 passed.
 - Full suite: 176 passed.
 - Real synthetic dataset:
@@ -990,9 +993,9 @@ Evidence:
   - Croston forecast: approximately 2.92 units/week.
   - TSB forecast: approximately 2.82 units/week.
 
-###### Checkpoint 3B Conclusions
+###### Checkpoint 3B — Conclusions
 
-Seven forecasting candidates are implemented:
+**Implemented forecasting candidates:**
 1. Naive
 2. MA4
 3. MA8
@@ -1001,31 +1004,89 @@ Seven forecasting candidates are implemented:
 6. Croston
 7. TSB
 
-All seven have passed their relevant local tests.
+All seven methods have passed their relevant local tests.
 
-Important limitations:
-- SES, Holt, Croston, and TSB are not yet integrated
-  into the common rolling-origin model selector.
-- Additional methods have not been compared
-  against Naive/MA4/MA8 on common backtest folds.
-- Eligibility thresholds and TSB smoothing
-  parameters are provisional.
-- Forecast accuracy and runtime for the full
-  network are not yet verified.
-- No method is globally approved as the winner.
+**Important limitations:**
+- SES, Holt, Croston, and TSB are not yet integrated into the common rolling-origin model selector.
+- Additional methods have not yet been compared against Naive, MA4, and MA8 using common backtest folds.
+- Model eligibility thresholds and TSB smoothing parameters remain provisional.
+- Full-network forecast accuracy and runtime have not been verified.
+- No method has been approved as the global winning model.
 
-Next: Checkpoint 3C — Full Model Selection.
+**Next checkpoint:** Checkpoint 3C — Full Model Selection.
+
+**Gate 3 status:** In progress. Acceptance benchmarks have not yet been fully verified.
+
 
 
 ##### Checkpoint 3C — Full Model Selection
 
-Status: Not started.
+Status: Unified integration and technical diagnostics completed.
+Final network accuracy and fallback validation remain pending.
 
-Next:
-- Integrate the complete method portfolio.
-- Validate comparable evaluation folds.
-- Finalize bias-check policy.
-- Benchmark model performance and runtime.
+Implemented:
+- Unified backtesting for seven forecasting candidates.
+- Four-fold rolling-origin evaluation.
+- Comparable-fold method selection.
+- WAPE-based ranking with signed bias reporting.
+- Provisional absolute-bias warning threshold of 10%.
+- Explicit handling of insufficient backtest history.
+- Calendar-aware eligibility and no-future-leakage checks.
+
+Evidence:
+- Forecast tests: 41 passed.
+- Full suite: 181 passed.
+- Synthetic network: 341 site/product/size series.
+- Methods selected: 339/341.
+- Series without method: 2.
+- Series with four valid folds: 319.
+- Series with fewer than four folds: 22.
+- Bias warnings: 46.
+- Execution errors: 0.
+- Model selection runtime: 50.30 seconds.
+- Total diagnostic runtime: 51.47 seconds.
+
+Selected model distribution:
+- SES: 92
+- Damped Holt: 92
+- MA4: 62
+- MA8: 50
+- Naive: 43
+- No selected method: 2
+- Croston and TSB: eligible in some cases,
+  but neither won selection in this diagnostic.
+
+Unresolved trailing-history cases:
+- SITE_003 / period_cup / one_size:
+  last record 2026-07-20; one valid fold.
+- SITE_019 / period_cup / one_size:
+  last record 2026-06-08; zero valid folds.
+
+Both partner sites remained active after their last
+recorded period-cup distribution.
+
+Week 2 deliberately does not zero-fill product-size
+history after the final recorded distribution.
+
+Do not invent trailing zero demand merely to
+increase model-selection coverage.
+
+These cases require documented stale-history or
+fallback treatment during Checkpoints 4 and 5.
+
+Important limitations:
+- Network-level out-of-sample WAPE is not yet measured.
+- Bias warnings are diagnostic, not automatic rejection.
+- Runtime benchmark must be repeated for the complete
+  forecasting workflow after hierarchy integration.
+- Missing method/WAPE cases require explicit explanation.
+- Model parameters and selection policy remain subject
+  to final analytical review.
+- The eight-week cold-start threshold is SITE-level.
+
+Next checkpoint:
+Checkpoint 4 — Hierarchical Forecasting.
 
 Gate 3 has NOT yet passed.
+
 
