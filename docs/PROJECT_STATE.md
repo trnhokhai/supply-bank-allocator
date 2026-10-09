@@ -1307,3 +1307,39 @@ Important:
 3. Final Week 3 handoff for Week 4 allocation work.
 
 Gate 3 remains IN PROGRESS.
+
+---
+
+## 20. Week 3 — Checkpoint 6: Forecast Page
+
+Status: Functional UI and automated tests passed.
+
+Implemented:
+- pages/2_Forecast.py
+- src/forecast_ui.py
+- tests/test_forecast_ui.py
+- Streamlit integration with Week 2 Upload session.
+- Forecast horizon selection from 4 to 8 weeks.
+- Site, product and product-size filters.
+- Network roll-up and individual series charts.
+- Method, parent WAPE and child WAPE/N/A display.
+- Provisional plausible ranges and quality warnings.
+- CSV and XLSX download controls.
+
+Evidence:
+- 10 Forecast UI tests passed.
+- 242 full-suite tests passed.
+- Streamlit Forecast page rendered successfully.
+- Four-week forecast: 1,364 rows across 25 sites.
+- Eight-week forecast: 2,728 rows across 25 sites.
+- Eight-week review rows: 176.
+- Eight-week plausible-range rows: 2,552.
+- Download file opening not yet independently confirmed.
+
+Pending:
+- Independent network-level and child-level WAPE.
+- Full backtesting runtime acceptance.
+- Final methods note and backtest report.
+- Gate 3 final review and Week 4 handoff.
+
+Gate 3 remains IN PROGRESS.
