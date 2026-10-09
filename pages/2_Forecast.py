@@ -8,6 +8,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.forecast_pipeline import build_unified_forecasts
+from src.gate3_reporting import attach_child_wape, run_in_memory_audit
 from src.forecast_ui import (
     ForecastUIError,
     backtest_method_table,
@@ -51,7 +52,7 @@ with st.form("forecast_parameters", clear_on_submit=False):
         value=False,
         help="For synthetic examples only. This does not establish that the survey was available on an earlier date.",
     )
-    submitted = st.form_submit_button("Generate forecast", type="primary", use_container_width=True)
+    submitted = st.form_submit_button("Generate forecast", type="primary", width="stretch")
 
 if submitted:
     started = perf_counter()
@@ -80,12 +81,52 @@ if result is None or result["signature"] != signature:
     st.info("Choose a horizon and click **Generate forecast**. If you loaded new files, generate the forecast again.")
     st.stop()
 
+# Historical accuracy is calculated separately for this upload, not read
+# from reports/gate3/ (which is only the checked-in synthetic example).
+accuracy = st.session_state.get("cp7_accuracy_result")
+if accuracy is not None and accuracy.get("signature") != signature:
+    st.session_state.pop("cp7_accuracy_result", None)
+    accuracy = None
+st.markdown("#### Historical accuracy audit")
+st.caption("Run a four-fold, four-week historical holdout test for the currently uploaded data. "
+           "It can take around 20 seconds and does not save uploads to disk.")
+if st.button("Run historical accuracy audit", key="cp7_run_accuracy"):
+    cleaned = st.session_state.get("cleaned_results", {}).get("distribution_log")
+    if cleaned is None:
+        st.warning("First click Clean & Validate on the Upload page.")
+    else:
+        try:
+            with st.spinner("Running historical, leakage-aware evaluation..."):
+                current_audit = run_in_memory_audit(cleaned.cleaning_result.dataframe, weekly)
+            accuracy = {"signature": signature, **current_audit}
+            st.session_state["cp7_accuracy_result"] = accuracy
+        except (ValueError, TypeError, KeyError, RuntimeError) as exc:
+            accuracy = None
+            st.session_state.pop("cp7_accuracy_result", None)
+            st.warning(f"Historical accuracy is unavailable for this upload: {exc}")
+
 forecasts = result["forecasts"]
+if accuracy is not None:
+    forecasts = attach_child_wape(forecasts, accuracy["per_child"])
+    audit_summary = accuracy["summary"]
+    network_wape = audit_summary.get("observable_panel_wape_pct")
+    wape_text = f"{network_wape:.2f}%" if network_wape is not None else "N/A"
+    st.write("Historical out-of-sample, recorded-panel network WAPE:", wape_text)
+    st.caption(f"Recorded actual rows scored: {audit_summary['scored_rows']:,} of "
+               f"{audit_summary['observed_actual_rows']:,}; missing-actual forecast rows: "
+               f"{audit_summary['forecast_rows_without_recorded_actual']:,}. "
+               "This measures the historical PIPELINE across cutoffs, not the method "
+               "currently selected for each future series.")
+    with st.expander("Historical product-size accuracy report"):
+        st.dataframe(accuracy["per_child"], width="stretch", hide_index=True)
+        st.download_button("Download historical accuracy (CSV)",
+                           accuracy["per_child"].to_csv(index=False).encode("utf-8-sig"),
+                           file_name="historical_product_size_accuracy.csv", mime="text/csv")
 issues = result["issues"]
 if forecasts.empty:
     st.warning("There are no forecastable series at this origin. Check the unresolved sites below.")
     if not issues.empty:
-        st.dataframe(issues, use_container_width=True, hide_index=True)
+        st.dataframe(issues, width="stretch", hide_index=True)
     st.stop()
 
 stats = summary(forecasts)
@@ -97,9 +138,10 @@ mc[2].metric("Rows needing review", stats["review_rows"])
 mc[3].metric("Rows with plausible range", stats["range_rows"])
 
 st.info(
-    "**Accuracy disclaimer:** The current child-level WAPE remains N/A pending independent backtesting. "
-    "Parent WAPE describes the site-total model, not individual product-size accuracy. "
-    "The 80% plausible ranges are provisional, not independently validated coverage."
+    "**Accuracy disclaimer:** Product-size WAPE appears only after running this "
+    "upload's historical holdout audit. It measures the prior forecasting "
+    "PIPELINE, not the current selected method. Parent WAPE remains a separate "
+    "site-total selection metric. The 80% plausible ranges are provisional."
 )
 if result["demo_optin"]:
     st.warning("Undated survey accepted for a retrospective synthetic demo only; this is not a valid historical accuracy claim.")
@@ -128,7 +170,7 @@ rollup["variant"] = rollup["product"].astype(str) + " / " + rollup["size"].astyp
 chart = px.line(rollup, x="week_start", y="forecast_units", color="variant", markers=True,
                 labels={"week_start": "Forecast week", "forecast_units": "Forecast units", "variant": "Product / Size"})
 chart.update_layout(legend_title_text="Product / Size", hovermode="x unified")
-st.plotly_chart(chart, use_container_width=True)
+st.plotly_chart(chart, width="stretch")
 st.caption("Roll-up sums point forecasts only. It is not a calibrated network prediction band.")
 
 st.markdown("#### Individual series")
@@ -145,9 +187,12 @@ child_wape = first["wape_pct"]
 mc2 = st.columns(3)
 mc2[0].metric("Selected method", str(first["method"]))
 mc2[1].metric("Site-total backtest WAPE", f"{parent_wape:.1f}%" if pd.notna(parent_wape) else "N/A")
-mc2[2].metric("Product-size backtest WAPE", f"{child_wape:.1f}%" if pd.notna(child_wape) else "N/A")
+mc2[2].metric("Historical product-size pipeline WAPE", f"{child_wape:.1f}%" if pd.notna(child_wape) else "N/A")
 if pd.isna(child_wape):
-    st.caption(f"Product-size WAPE: N/A — {first['wape_reason']}. Site-total WAPE must not be reused here.")
+    st.caption(f"Historical pipeline WAPE: N/A — {first['wape_reason']}. Site-total WAPE is not a substitute.")
+else:
+    st.caption("Product-size WAPE was measured on earlier holdout predictions, "
+               "potentially using different historical methods than the current one.")
 if detail["requires_review"].fillna(False).any():
     flags = sorted(set(v for v in detail["quality_flags"].dropna().astype(str) if v))
     st.warning("This series needs review. Flags: " + "; ".join(flags) + ". A zero forecast is not proof of zero need.")
@@ -162,7 +207,7 @@ if detail["lower_units"].notna().all() and detail["upper_units"].notna().all():
 fig.add_trace(go.Scatter(x=detail["week_start"], y=detail["forecast_units"],
                          mode="lines+markers", name="Point forecast"))
 fig.update_layout(xaxis_title="Week", yaxis_title="Individual units", hovermode="x unified")
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 
 with st.expander("How was this forecast calculated?"):
     st.write("Method:", first["method"])
@@ -176,19 +221,19 @@ st.markdown("#### Forecast table and downloads")
 show_cols = ["site_id", "product", "size", "week_start", "forecast_units",
              "lower_units", "upper_units", "method", "wape_pct", "wape_reason",
              "parent_wape_pct", "forecast_source", "requires_review", "quality_flags"]
-st.dataframe(visible[[c for c in show_cols if c in visible.columns]], use_container_width=True, hide_index=True)
+st.dataframe(visible[[c for c in show_cols if c in visible.columns]], width="stretch", hide_index=True)
 
 csv_col, excel_col = st.columns(2)
 csv_col.download_button("Download filtered forecasts (CSV)", export_forecasts(visible, "csv"),
-                        file_name="supply_bank_forecast.csv", mime="text/csv", use_container_width=True)
+                        file_name="supply_bank_forecast.csv", mime="text/csv", width="stretch")
 excel_col.download_button("Download filtered forecasts (XLSX)", export_forecasts(visible, "xlsx"),
                           file_name="supply_bank_forecast.xlsx",
-                          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
 
 with st.expander("Site-level backtest method report (provisional)"):
     st.caption("These are site-total historical backtest WAPEs, not child-level errors or independent Gate 3 accuracy.")
     methods = backtest_method_table(forecasts)
-    st.dataframe(methods, use_container_width=True, hide_index=True)
+    st.dataframe(methods, width="stretch", hide_index=True)
     st.download_button("Download site-level method report (CSV)",
                        methods.to_csv(index=False).encode("utf-8-sig"),
                        file_name="site_method_report_provisional.csv", mime="text/csv")
@@ -196,6 +241,7 @@ with st.expander("Site-level backtest method report (provisional)"):
 if not issues.empty:
     st.warning(f"{issues['site_id'].nunique()} sites have unresolved forecasting issues. Do not interpret missing output as zero demand.")
     with st.expander("Unresolved sites and reasons", expanded=True):
-        st.dataframe(issues, use_container_width=True, hide_index=True)
+        st.dataframe(issues, width="stretch", hide_index=True)
 
-st.caption("Gate 3 remains in progress until independent network WAPE and runtime acceptance are verified.")
+st.caption("Gate 3: synthetic historical evaluation met WAPE/runtime benchmarks. "
+           "This upload needs its own audit; unresolved observational and survey limits remain documented.")

@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** October 9, 2026
-**Current gate:** Week 3 — CP5D diagnostic validated; final tests and Forecast Page next
+**Current gate:** Week 3 — Gate 3 final verification and handoff
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1343,3 +1343,75 @@ Pending:
 - Gate 3 final review and Week 4 handoff.
 
 Gate 3 remains IN PROGRESS.
+
+---
+
+## 21. Week 3 — Final Gate 3 Validation
+
+Date: October 9, 2026
+
+Status: Core quantitative benchmarks met.
+Final export verification and handoff pending.
+
+### Accuracy and Runtime Evidence
+
+- Historical evaluation: 4 out-of-sample folds,
+  each with a 4-week forecast horizon.
+- Observed-panel network WAPE: 16.864%.
+- Target network WAPE: below 20%.
+- Observed-panel signed bias: +1.646%.
+- Full evaluation job runtime: 20.154 seconds.
+- Runtime target: below 60 seconds.
+- Recorded actual rows evaluated: 5,398 / 5,398.
+- Forecast rows without recorded actual: 58.
+- Estimated units in those unobserved rows: 1,648.66.
+- Product-size series with WAPE: 340 / 341.
+- SITE_019 / period_cup / one_size:
+  WAPE N/A — no complete four-week fold.
+- Final automated test suite: 264 passed.
+
+### Forecast Application Evidence
+
+- Forecast Page renders successfully.
+- 4-week forecast: 1,364 rows, 25 sites.
+- 8-week forecast: 2,728 rows, 25 sites.
+- Historical accuracy audit works in Streamlit.
+- Product-size historical pipeline WAPE is displayed.
+- Site-total model WAPE is separately labeled.
+- CSV/XLSX export opening: confirmed manually.
+- Both formats downloaded and opened successfully in Excel.
+
+### Limitations
+
+- WAPE evaluates recorded distribution observations,
+  not independently measured unmet demand.
+- Missing recorded actuals are not assumed to be zero.
+- Historical pipeline WAPE may involve different
+  selected methods across evaluation origins.
+- Undated synthetic surveys are allowed only for
+  explicitly labeled retrospective demonstrations.
+- Nominal 80% plausible ranges do not establish
+  independently validated 80% empirical coverage.
+- Stale or zero-mix forecasts require manual review.
+- Forecast quantities remain fractional; Week 4
+  Allocation must define safe integer allocation.
+
+### Week 4 Boundary
+
+Next gate: Allocation Optimizer.
+
+Reuse canonical forecast outputs at:
+Site x Product x Size x Week.
+
+Preserve:
+- Forecast source and method
+- WAPE and WAPE reason
+- Plausible-range metadata
+- Quality flags and review requirements
+- Missing-history and survey provenance
+
+Do not silently treat unobserved distribution
+as zero demand.
+
+Week 4 handoff will be supplied as a prompt.
+No separate handoff document is required.
