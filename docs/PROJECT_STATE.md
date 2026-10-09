@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 8, 2026
-**Current gate:** Week 3 — Forecasting, Checkpoint 3C integration validated; Checkpoint 4 next
+**Last updated:** October 9, 2026
+**Current gate:** Week 3 — Forecasting, Checkpoint 4B validated; Checkpoint 4C next
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1089,4 +1089,86 @@ Checkpoint 4 — Hierarchical Forecasting.
 
 Gate 3 has NOT yet passed.
 
+
+---
+
+## 18. Week 3 — Checkpoint 4: Hierarchical Forecasting
+
+### Checkpoint 4A — Hierarchical Data Engine
+
+Status: Core implementation and tests completed.
+
+Implemented:
+- src/hierarchy.py
+- tests/test_hierarchy.py
+- Historical product-size mix using only pre-origin data.
+- Site-total and site-product disaggregation.
+- Canonical product-size separation.
+- Forecast-unit conservation.
+- Explicit full-history fallback when recent mix is unavailable.
+
+Evidence:
+- 7 hierarchy tests passed.
+
+### Checkpoint 4B — Fair Hierarchy Comparison
+
+Status: Experiment completed and validated.
+Preferred candidate: Site-total Top-down (provisional).
+
+Implemented:
+- src/hierarchy_eval.py
+- tests/test_hierarchy_eval.py
+- run_cp4b.py
+- Common-panel comparison using fixed Naive forecasts.
+- Four rolling folds of four calendar weeks.
+- Bottom-up, site-total and site-product approaches.
+
+Overall results:
+- Bottom-up WAPE: 21.337%.
+- Site-total Top-down WAPE: 18.083%.
+- Site-product Top-down WAPE: 20.591%.
+
+Site-total WAPE by fold:
+- Fold 1: 17.63%.
+- Fold 2: 16.75%.
+- Fold 3: 18.46%.
+- Fold 4: 19.44%.
+
+Site-total achieved the lowest WAPE in all four folds.
+
+Evaluation coverage:
+- Common evaluated rows: 5,344.
+- Recorded rows in the evaluation window: 5,398.
+- Excluded rows: 54.
+- Excluded actual units: 4,475.
+- Excluded share of actual units: 0.62%.
+- Experiment runtime: approximately 0.39 seconds.
+
+Analytical conclusion:
+Site-total Top-down is the preferred hierarchy candidate
+based on this fixed-Naive common-panel experiment.
+
+This is NOT yet a final production hierarchy decision.
+
+Important limitations:
+- All three approaches used the same fixed Naive method.
+- The experiment did not integrate seven-model selection.
+- Missing evaluation observations were not fabricated as zeros.
+- The common panel excludes some product-size records.
+- Independent final network accuracy is not yet measured.
+- Gate 3 WAPE and full workflow runtime are not yet certified.
+
+### Checkpoint 4C — Production Forecast Contract
+
+Status: Not started.
+
+Next:
+- Define final weekly forecast output schema.
+- Integrate the preferred hierarchy into forecast generation.
+- Preserve product-size identity and unit conservation.
+- Include method, forecast source, error and warning fields.
+- Define missing/stale-history handling for Checkpoint 5.
+- Ensure outputs are usable by the future allocation engine.
+
+Gate 3 remains IN PROGRESS.
 
