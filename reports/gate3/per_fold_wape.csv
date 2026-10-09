@@ -1,0 +1,5 @@
+fold,wape_pct,bias_pct,actual_units,absolute_error_units,scored_rows,wape_reason,evaluated_folds,methods_used,matched_rows_all,unforecasted_actual_rows,unforecasted_actual_units
+1,18.54872227047412,7.614425252741517,179267.0,33251.737952610834,1361,,1,damped_holt;ma4;ma8;naive;ses,1361,0,0.0
+2,16.439851815118484,3.8106225363407726,177763.0,29223.973782109068,1359,,1,damped_holt;ma4;ma8;naive;ses,1359,0,0.0
+3,15.879120066116565,1.5657747611960608,176297.0,27994.412302961522,1353,,1,damped_holt;ma4;ma8;naive;ses,1353,0,0.0
+4,16.58494041181998,-5.912771554398597,190545.0,31601.774707702374,1325,,1,damped_holt;ma4;ma8;naive;ses,1325,0,0.0
