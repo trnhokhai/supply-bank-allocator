@@ -98,6 +98,12 @@ with st.form("g4_allocation_controls", clear_on_submit=False):
                         min_value=0.0, max_value=0.20, value=0.01, step=0.01,
                         help="Adds share × total planning need × worst-site shortfall rate to weighted unmet need. Not a hard guarantee.")
 
+    protect_fill = st.checkbox(
+        "Protect worst-partner fill rate against proportional baseline",
+        value=True,
+        help="Keeps the lowest partner fill at least as high as the same-constraint proportional baseline. "
+             "May reduce weighted unmet improvement; uncheck to explore the soft-penalty trade-off.",
+    )
     with st.expander("Optional: verified storage capacity limits (individual units)"):
         st.caption("Do NOT enter survey storage capacity in cases here. Only use a verified total individual-unit cap "
                    "for each partner for the whole planning cycle. Leave blank when unknown.")
@@ -134,11 +140,13 @@ if submitted:
             solved = run_operational_allocation(
                 prepared, fairness_floor=fairness,
                 worst_shortfall_penalty_share=penalty, time_limit_seconds=8,
+                protect_baseline_fill=protect_fill,
             )
         st.session_state["g4_allocation_result"] = {
             "signature": signature, "solved": solved, "prepared": prepared,
             "settings": {"cycle_weeks": cycle_weeks, "alpha": alpha, "beta": beta,
                          "fairness_floor": fairness, "penalty_share": penalty,
+                         "protect_baseline_fill": protect_fill,
                          "verified_capacity_count": len(capacities)},
             "elapsed_total_seconds": perf_counter() - start,
         }
@@ -170,6 +178,15 @@ st.caption(
     f"(including solver {solved['elapsed_seconds']:.2f}s)"
 )
 
+st.caption(
+    f"Solver: **{solved['solver_backend']}** · solver time: "
+    f"**{solved['solver_seconds']:.3f}s** · certified MIP relative gap: "
+    f"**{solved['certified_mip_gap']:.2g}** · "
+    f"Baseline worst-site protection: "
+    f"**{'ON' if solved['baseline_fill_protection'] else 'OFF'}**. "
+    "A positive certified gap is not a proof of exact zero-gap optimality."
+)
+
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Cycle allocated", f"{ops['allocated_cycle_units']:,} units")
 c2.metric("Planning unmet", f"{metrics['total_unmet_units']:,} units")
@@ -198,10 +215,10 @@ b3.metric("Optimized worst-site fill", f"{comparison['optimized_worst_fill_pct']
 b4.metric("Baseline worst-site fill", f"{comparison['baseline_worst_fill_pct']:.1f}%")
 if comparison["weighted_units_improved"] <= 0:
     st.info("This run did not improve weighted planning unmet units versus the constrained proportional baseline.")
-if comparison["worst_fill_delta_pp"] < -1e-7:
+if comparison["worst_fill_delta_pp"] < -1e-5:
     st.warning("Trade-off: worst-partner fill rate DECREASED versus the baseline. "
                "The maximum-shortfall penalty is a soft objective, not a guaranteed floor.")
-elif comparison["worst_fill_delta_pp"] > 1e-7:
+elif comparison["worst_fill_delta_pp"] > 1e-5:
     st.success("The worst-partner fill rate increased versus the proportional baseline in this run.")
 else:
     st.caption("Worst-partner fill rate is unchanged versus the proportional baseline.")
@@ -229,7 +246,9 @@ with st.expander("How was this calculated?", expanded=False):
         "(penalty share × total planning need × maximum partner shortfall rate). "
         "The fairness minimum is relaxed for scarce individual sizes or integer rounding as needed.\n\n"
         "**Comparison:** the proportional baseline uses the same demand, verified inventory, minimums, "
-        "and any verified storage caps. Improvements are not guaranteed."
+        "and any verified storage caps. When enabled, baseline fill protection adds a guardrail "
+        "on worst-partner fill; it does not guarantee a strict improvement. "
+        "Improvements are not guaranteed."
     )
 
 fair = solved["fairness"]

@@ -112,6 +112,7 @@ def test_forecast_site_missing_from_master_rejected():
 
 def test_invalid_incoming_quantity_rejected():
     f, inv, donor, master = _tables()
+    donor["quantity"] = donor["quantity"].astype(object)
     donor.loc[0, "quantity"] = 1.5
     with pytest.raises(AllocationError, match="nonnegative whole"):
         _prepared(f, inv, donor, master)

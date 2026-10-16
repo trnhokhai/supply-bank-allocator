@@ -1,6 +1,6 @@
-# Methods Note — Forecasting (Week 3 / Gate 3)
+# Methods Note — Forecasting and Allocation (Gates 3–4)
 
-Updated October 9, 2026. **Applies to the ChiEAC Diaper & Period Supply Bank Allocator, not a validated measure of unmet community demand.**
+Updated October 16, 2026. **Applies to the ChiEAC Diaper & Period Supply Bank Allocator, not a validated measure of unmet community demand.**
 
 ## Purpose and units
 
@@ -69,3 +69,47 @@ streamlit run app.py
 ```
 
 In Streamlit: Upload → Demo Mode → Clean & Validate → Forecast → Generate → Run historical accuracy audit. Confirm 4- and 8-week horizons, site and product-size filters, warning display, and CSV/XLSX exports.
+
+---
+
+## Gate 4 — Equity-aware allocation methods (October 16, 2026)
+
+### Demand and supply contract
+
+Input demand is the **distribution-based forecast** at `site_id × product × size × ISO week`; sum across the selected 1–8 forecast weeks and use network-SKU largest-remainder rounding to individual units. This is *planning need*, not a measured unconstrained community demand estimate. Missing/flagged series remain reviewable. Inventory must be a single dated stock snapshot; only confirmed size-identified incoming quantities arriving after the snapshot and on or before the cycle end are added to *cycle* supply. Pending/unknown-size deliveries are excluded. Pick drafts are derived separately from **on-hand** supply. These do not account for already promised units or physical discrepancies after the snapshot: staff must verify before picking. Storage capacities entered in *cases* remain unenforced until a trusted SKU-aware unit conversion or explicitly verified individual-unit cap exists.
+
+### Optimization model and fairness trade-off
+
+For site `s` and SKU `k`: forecast cycle need `D_sk`, allocated integer units `x_sk`, unmet planning units `u_sk = D_sk - x_sk`, site equity weight `w_s`, SKU supply `A_k`, and `z` maximum site shortfall rate. The objective is:
+
+`min sum_s,k(w_s * u_sk) + lambda * z`, where `lambda = penalty_share * total_network_planning_need`.
+
+Constraints include `0 <= x_sk <= D_sk` integer, `sum_s x_sk <= A_k`, per-site optional verified-unit storage caps, `x_sk >= adjusted_fairness_floor_sk`, and `sum_k u_sk <= z * sum_k D_sk` for sites with positive total need. Scarce SKU-level minimum floors are reduced transparently where requested minima are infeasible or integer rounding would over-allocate. The UI's default baseline protection additionally constrains worst-site shortfall to be **no worse** than the proportional baseline, with the same need, supply and cap constraints. Turning off protection exposes the soft-only trade-off. Equity weights: `1 + alpha * poverty_band_score + beta * priority_population_flag_count`; missing survey equity fields default to weight 1.
+
+### Baseline and reported metrics
+
+Proportional allocation uses a deterministic supply-limited integer apportionment with the same adjusted fairness minima, or a capacity-aware constrained comparator where explicit shared site caps apply. Evaluate (a) equity-weighted planning unmet, (b) *physical* planning unmet units, (c) worst-site fill from aggregate allocated / aggregate need across products, and (d) runtime. A lower weighted unmet score does not mean less total physical shortage. Baseline protection can preserve, but does not promise to improve, worst-site fill.
+
+### Solver implementation and reproducibility
+
+`src/allocation_highs.py` uses SciPy HiGHS mixed-integer optimization, validates allocation integrality and per-SKU/site material constraints after solving, and requires certified relative MIP gap no larger than `1e-5` (within numerical tolerance). PuLP/CBC remains a small-case reference implementation in `src/allocate.py`; both obey the same mathematical restrictions but may choose different equivalent integer allocations. Some high-penalty MILPs can time out; a solve without a satisfactory certificate is not accepted as a successful plan. The sample-scale runtime is **not** the full historical forecasting time.
+
+On **October 16, 2026**, the Windows project environment reported (synthetic only):
+
+| Scenario | Protected weighted unmet | Proportional weighted unmet | Relative improvement | Worst-site fill (optimized / baseline) | Runtime |
+|---|---:|---:|---:|---:|---|
+| 25-site Demo Mode | ~3,846.4 | ~3,972.6 | **+3.18%** | **98.27% / 98.27%** | UI end-to-end allocation ~0.49 s |
+| 80 partners × 20 SKUs (1,600 decision cells) | 96,103.6 | 98,882.9 | **+2.81%** | **79.94% / 79.94%** | complete benchmark worker ~1.048 s; HiGHS ~0.146 s |
+
+The 80×20 report gave certified MIP relative gap ~`1.2e-7`, below the `1e-5` requested bound; measured network demand 498,303 units and available supply 414,296. The benchmark is on a **single fixed seeded stress case**, not a guarantee for arbitrary real data. Streamlit Demo Mode reported 191,137 cycle units allocated, 170,737 ready-now and 20,400 awaiting incoming. In contrast, 25-site soft-only penalty 0.01 yielded **12.22%** weighted improvement but worst-site fill of **93.50%** versus **98.27%** baseline, demonstrating an actual cost-of-fairness trade-off. With protection ON, worst-site fill is unchanged, not strictly increased.
+
+### Known limitations
+
+- Forecasting may underestimate unconstrained need where historical distributions were supply-constrained.
+- The synthetic results are not a practitioner pilot, and 22 cycle site/SKU series were flagged for review in the demo; survey case-capacity limitations remain visible.
+- Cycle supply may arrive only near the cycle end; there is no intracycle shipping schedule. Ready-now pick lists remain a physical-stock **draft**, not fulfillment authorization.
+- PuLP 3.3.2 emits future-API warnings in the reference tests; dependency upgrades need separate review rather than silence-through-filtering.
+
+### Verify locally
+
+`python -m pytest -q`, followed by `python run_gate4.py --section scale` (from the root in the pinned `.venv`). In Streamlit, run **Upload → Demo Mode → Clean & Validate → Forecast → Generate forecast → Allocate → Optimize allocation**, keep the worst-partner protection checked, and open CSV exports in a spreadsheet reader. Current final cleanup tests need to be rerun on the Windows project environment before claiming Gate 4 closeout.

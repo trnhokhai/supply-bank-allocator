@@ -1307,3 +1307,55 @@ The final hierarchy and selection policy remain
 open decisions for later Week 3 checkpoints.
 
 ---
+
+# Decision 037 — Forecast-to-Allocation Contract and Physical Availability
+
+**Status:** Accepted (Week 4)
+
+### Decision
+
+Aggregate canonical Week 3 weekly forecasts by site, product and size for a selected 1–8-week cycle; integerize with largest-remainder rounding while retaining the rounded network SKU total. Keep `requires_review`, quality flags, forecast provenance and unresolved sites visible. Sum an inventory snapshot only after checking consistent dates and location/SKU identity; add only confirmed, known-size arrivals after the snapshot and by the cycle end. Exclude pending, late, previously snapshotted and unknown-size supply. The ready-now pick suggestion may draw only against on-hand snapshot stock, never future donations. Storage limits expressed only in *cases* are not guessed into individual units.
+
+### Rationale
+
+Distribution forecasts are constrained planning proxies, not measured latent demand. Incorrect timing or guessed case packs can create impossible pick lists.
+
+### Consequence
+
+Expose planning warnings, cycle commitments, awaiting-inbound quantities and verified stock-on-hand pick drafts separately. Manual review remains required; no automatic commitment is implied.
+
+---
+
+# Decision 038 — Equity Objective, Baseline Protection and Integer Optimization
+
+**Status:** Accepted (Week 4; synthetic validation only)
+
+### Decision
+
+Minimize equity-weighted unmet **planning** units plus Benjamin's scaled maximum-site-shortfall-rate penalty. Enforce supply, indivisible-unit and feasibility-adjusted size-level fairness minimum constraints. Retain proportional allocation as a comparator under the same constraints. Default the operational UI to a guard against **worsening** proportional baseline worst-partner fill; allow users to disable the guard for transparent soft-penalty sensitivity analysis. A guard is not a claim of strict improvement. The soft penalty is retained, not replaced.
+
+### Rationale
+
+On the synthetic 25-site demo and the 80×20 stress case, soft-only `0.01` improves weighted unmet more but worsens the worst-site fill. A baseline-protected `0.01` plan produces a smaller weighted improvement and no worst-site deterioration; the proportional plan is a feasible incumbent, so the guard itself cannot create new infeasibility when all shared constraints are satisfied.
+
+### Consequence
+
+Report weighted unmet, actual unmet units, baseline worst-site fill and optimized worst-site fill together, without promising improvement on both metrics. Never manufacture a stricter improvement by editing synthetic data.
+
+---
+
+# Decision 039 — HiGHS for Operational Solves; PuLP/CBC Retained as Reference
+
+**Status:** Accepted (Week 4, conditional on final cleanup regression)
+
+### Decision
+
+Use SciPy/HiGHS MILP as the primary operational solver for the same supply/fairness/equity decision model, with integer solution validation and explicit certified relative MIP gap threshold (`1e-5` requested). Keep PuLP/CBC pinned as an independently tested small-instance reference backend; do not assume CBC's best-time complexity is adequate for 80×20. Record solver-only and end-to-end benchmark times separately.
+
+### Rationale
+
+CBC timed out during a seeded 80×20 run even after compacting redundant variables; HiGHS completed the same scale of test within the 10-second planning target. Small-instance reference tests compare objective values and material constraints, not arbitrary tie-breaking allocations.
+
+### Consequence
+
+Do not claim exact zero-gap optimality when gap is positive, generalized production performance from a single synthetic benchmark, or field-level benefit without a pilot. Pinned PuLP 3.3.2 emits deprecation notices in reference tests; address them through future dependency-upgrade testing rather than disabling warnings or untested API substitutions.

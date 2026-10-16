@@ -170,11 +170,20 @@ def _base_model(need, supply, lower_bounds, capacities):
     model = pulp.LpProblem("supply_bank_allocation", pulp.LpMinimize)
     keys = [tuple(x) for x in need[KEY].itertuples(index=False, name=None)]
     n = {tuple(r[:3]): int(r[3]) for r in need[KEY + ["need_units"]].itertuples(index=False, name=None)}
-    x = {key: pulp.LpVariable(f"alloc_{i}", lowBound=0, upBound=n[key], cat=pulp.LpInteger) for i, key in enumerate(keys)}
-    u = {key: pulp.LpVariable(f"unmet_{i}", lowBound=0, cat=pulp.LpInteger) for i, key in enumerate(keys)}
-    for key in keys:
-        model += x[key] + u[key] == n[key]
-        model += x[key] >= lower_bounds[key]
+    # One integer allocation variable per site/SKU is sufficient.
+    # Unmet = need - allocated, so independent integer unmet variables and
+    # 2 constraints per cell are mathematically redundant. The identity
+    # remains exact (no fractional rounding or objective approximation).
+    x = {
+        key: pulp.LpVariable(
+            f"alloc_{i}",
+            lowBound=int(lower_bounds[key]),
+            upBound=n[key],
+            cat=pulp.LpInteger,
+        )
+        for i, key in enumerate(keys)
+    }
+    u = {key: n[key] - x[key] for key in keys}
     by_sku = {}
     by_site = {}
     for key in keys:
@@ -272,6 +281,9 @@ def solve_allocation(
     capacities_units: dict[str, int] | None = None,
     worst_shortfall_penalty_share: float = 0.01,
     time_limit_seconds: int = 8,
+    protect_baseline_fill: bool = False,
+    solver: str = "highs",
+    mip_rel_gap: float = 1e-5,
 ) -> dict:
     """Optimize a one-cycle plan and compare fairly against proportional split.
 
@@ -292,6 +304,13 @@ def solve_allocation(
         raise AllocationError("Fairness floor cannot exceed 100%.")
     if type(time_limit_seconds) is not int or time_limit_seconds <= 0:
         raise AllocationError("Solver time limit must be a positive whole number.")
+    if type(protect_baseline_fill) is not bool:
+        raise AllocationError("Baseline fill protection must be Boolean.")
+    if solver not in {"highs", "cbc"}:
+        raise AllocationError("Unknown solver: use 'highs' or 'cbc'.")
+    if (not isinstance(mip_rel_gap, (int, float)) or isinstance(mip_rel_gap, bool)
+            or not np.isfinite(mip_rel_gap) or not 0 < mip_rel_gap <= 1e-3):
+        raise AllocationError("Relative MIP gap must be in (0, 0.001].")
     weights = equity_weights or {}
     sites = set(demand["site_id"])
     weights = {site: float(weights.get(site, 1.0)) for site in sites}
@@ -311,18 +330,56 @@ def solve_allocation(
                 f"fairness minimums ({minimum}); review capacity or fairness floor."
             )
 
-    model, keys, n, x, u, by_site = _base_model(demand, available, floors, caps)
-    z = pulp.LpVariable("maximum_site_shortfall_fraction", lowBound=0, upBound=1)
-    for site, items in by_site.items():
-        site_need = sum(n[key] for key in items)
-        if site_need:
-            model += pulp.lpSum(u[key] for key in items) <= z * site_need
-    total_need = sum(n.values())
-    penalty_coefficient = worst_shortfall_penalty_share * total_need
-    model += pulp.lpSum(weights[key[0]] * u[key] for key in keys) + penalty_coefficient * z
-    _solve(model, time_limit_seconds)
-    optimized = {key: int(round(pulp.value(x[key]))) for key in keys}
+    # The proportional baseline is computed FIRST, because it is a feasible
+    # incumbent under the same fairness and capacity constraints. Guarding the
+    # worst-site fill can therefore never create infeasibility by itself.
     baseline = _proportional_baseline(demand, available, floors, caps, time_limit_seconds)
+    by_site_need = demand.groupby("site_id")["need_units"].sum().to_dict()
+    by_site_unmet_baseline = {site: 0 for site in by_site_need}
+    for row in demand[KEY + ["need_units"]].itertuples(index=False, name=None):
+        key = tuple(row[:3])
+        by_site_unmet_baseline[key[0]] += int(row[3]) - baseline[key]
+    baseline_worst = max((by_site_unmet_baseline[s] / n
+                          for s, n in by_site_need.items() if n), default=0.0)
+    baseline_bound = baseline_worst if protect_baseline_fill else None
+
+    keys = [tuple(row) for row in demand[KEY].itertuples(index=False, name=None)]
+    n = {tuple(row[:3]): int(row[3]) for row in demand[KEY + ["need_units"]].itertuples(index=False, name=None)}
+    total_need = int(demand["need_units"].sum())
+    penalty_coefficient = worst_shortfall_penalty_share * total_need
+    if solver == "highs":
+        from src.allocation_highs import solve_highs
+        try:
+            certified = solve_highs(
+                demand, available, floors, weights, caps,
+                penalty_share=worst_shortfall_penalty_share,
+                baseline_worst_shortfall=baseline_bound,
+                time_limit_seconds=time_limit_seconds,
+                mip_rel_gap=float(mip_rel_gap),
+            )
+        except (ValueError, RuntimeError) as exc:
+            raise AllocationError(str(exc)) from exc
+        optimized = certified["allocation"]
+        solver_seconds = certified["solver_seconds"]
+        certified_gap = certified["mip_relative_gap"]
+    else:
+        # Preserve Benjamin's original PuLP formulation as a transparent
+        # reference/compatibility solver, not the default production backend.
+        model, keys, n, x, u, by_site = _base_model(demand, available, floors, caps)
+        z = pulp.LpVariable(
+            "maximum_site_shortfall_fraction", lowBound=0,
+            upBound=min(1.0, baseline_worst + 1e-9) if protect_baseline_fill else 1.0,
+        )
+        for site, items in by_site.items():
+            site_need = sum(n[key] for key in items)
+            if site_need:
+                model += pulp.lpSum(u[key] for key in items) <= z * site_need
+        model += pulp.lpSum(weights[key[0]] * u[key] for key in keys) + penalty_coefficient * z
+        solve_started = perf_counter()
+        _solve(model, time_limit_seconds)
+        solver_seconds = perf_counter() - solve_started
+        optimized = {key: int(round(pulp.value(x[key]))) for key in keys}
+        certified_gap = 0.0  # CBC reference accepts only its Optimal status.
 
     def _result_rows(solution):
         rows = []
@@ -363,10 +420,14 @@ def solve_allocation(
     proportional = _result_rows(baseline)
     m = _metrics(plan)
     b = _metrics(proportional)
+    if protect_baseline_fill and m["worst_site_fill_rate"] + 1e-6 < b["worst_site_fill_rate"]:
+        raise AllocationError("Optimized worst-site fill is below the protected baseline.")
     return {"allocation": plan, "proportional_baseline": proportional,
             "metrics": m, "baseline_metrics": b,
             "comparison": {"weighted_unmet_delta": m["weighted_unmet_units"] - b["weighted_unmet_units"],
                            "worst_site_fill_delta": m["worst_site_fill_rate"] - b["worst_site_fill_rate"]},
             "fairness": fairness_info, "objective_penalty_coefficient": penalty_coefficient,
             "elapsed_seconds": perf_counter() - started,
+            "solver_seconds": solver_seconds, "solver_backend": "scipy_highs" if solver == "highs" else "pulp_cbc_reference",
+            "certified_mip_gap": certified_gap, "baseline_fill_protection": protect_baseline_fill,
             "baseline_type": "capacity_aware_proportional" if caps else "proportional"}

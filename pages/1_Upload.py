@@ -94,7 +94,7 @@ def show_raw_preview(
     ):
         st.dataframe(
             dataframe.head(10),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -412,7 +412,7 @@ if raw_inputs:
     if st.button(
         "Clean & Validate",
         type="primary",
-        use_container_width=True,
+        width="stretch",
     ):
         cleaned_results = {}
         processing_errors = {}
@@ -582,7 +582,7 @@ if raw_inputs:
             ):
                 st.dataframe(
                     result.dataframe.head(10),
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -660,7 +660,7 @@ if raw_inputs:
 
             st.dataframe(
                 weekly.head(25),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -681,7 +681,7 @@ if raw_inputs:
             else:
                 st.dataframe(
                     inactive_spans,
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                 )
 
@@ -696,7 +696,7 @@ if raw_inputs:
 
             st.dataframe(
                 site_master,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 

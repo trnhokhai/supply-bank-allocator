@@ -1415,3 +1415,41 @@ as zero demand.
 
 Week 4 handoff will be supplied as a prompt.
 No separate handoff document is required.
+
+---
+
+## 22. Week 4 — Gate 4 scientific and operational verification (October 16, 2026)
+
+**Current stage:** Allocation working on synthetic Demo Mode and 80-site benchmark; final cleanup regression and Git commit still pending. The preceding Week 3 state sections are preserved as historical checkpoint records.
+
+### Delivered implementation
+
+- `src/allocate.py`: 4-week (configurable 1–8 weeks) integer planning needs, fairness minima, proportional benchmark and reference PuLP/CBC implementation.
+- `src/allocation_highs.py`: fast HiGHS MILP with an independently checked integer allocation, supply constraints, optional verified capacity limits and relative MIP gap certificate.
+- `src/allocation_inputs.py`: canonical weekly forecast → cycle units, inventory snapshot + confirmed in-cycle arrivals → available supply, partner equity weights, quality warnings and on-hand-only pick draft.
+- `src/allocation_ui.py`, `pages/3_Allocate.py`: Streamlit planning controls, optional baseline-protected objective, baseline metrics, provenance and Excel-safe CSV exports.
+- Test suites include optimized/soft-only trade-offs, material balances, timing exclusions, optional storage-capacity handling, schema and CSV safety. `tests/test_gate4_integration_contract.py` adds explicit UI→backend keyword checks after a stale Streamlit process exposed an integration mismatch.
+
+### Verified evidence reported from the Windows project environment
+
+- Production candidate full-suite result *before this final cleanup*: **313 passed, 53 warnings (October 16, 2026)**. The warnings included pandas/NumPy date/fixture warnings and pinned PuLP 3.3.2 reference warnings. This is historical evidence, not a claim that the final cleanup itself has passed.
+- **80 partners × 20 variants** (1,600 planning cells), fixed seeded synthetic stress fixture: 498,303 needed, 414,296 available, 96,103.6 equity-weighted unmet vs 98,882.9 proportional baseline (**2.81% lower**); worst-site fill **79.94% for both**. HiGHS solver ~0.146 s; complete isolated optimization worker including comparator ~1.048 s (**under 10 s**); certified relative MIP gap ~1.2e-7.
+- **25-site Demo Mode:** 191,137 cycle allocated; 2,512 planning unmet units; 170,737 ready from inventory; 20,400 dependent on confirmed inbound; equity-weighted unmet ~3,846.4 vs ~3,972.6 baseline (**3.18% lower**); worst-site fill ~98.27% for both. Manual Streamlit run ~0.49 s; HiGHS report visible, no crash after restarting the stale server.
+- Soft-only penalty 0.01 improved weighted unmet more (~12.22% on the 25-site demo) but reduced worst-site fill (to ~93.5% versus ~98.27% baseline). Protected default preserves baseline fill while retaining weighted improvement. This is **not a strict improvement** in worst-site fill.
+
+### Unresolved limitations / operational cautions
+
+- Synthetic historical distributions are not independently measured, unconstrained community demand. Total physical planning unmet does not necessarily change under reallocation.
+- Some forecast series require review; provisional and zero-mix conditions are not silently treated as zero actual need.
+- Storage capacity from survey is expressed in cases and **is not enforced** without a verified case-to-individual-unit conversion. The UI accepts explicit verified unit limits.
+- The cycle plan may include confirmed future deliveries. The ready-now pick file considers **on-hand snapshot only**, is a draft, and requires physical verification before fulfillment.
+- The benchmark uses a **fixed synthetic case**, not representative evidence of performance on all 80-site datasets. Real partner operational validation is pending; no completed practitioner interview is claimed.
+- An optimizer cannot guarantee strict improvement over a proportional baseline on *both* objectives for every constrained instance. The observed worst-site result is **equal**, not improved. Larger soft penalties can create difficult MILP instances and may time out.
+
+### Final handoff checklist
+
+1. Apply the Gate 4 warning and integration-test cleanup, run full `python -m pytest -q`, and rerun `run_gate4.py --section scale` on the same environment.
+2. Manually regenerate forecast/plan, inspect the warning panel, and open all exported CSVs in Excel or a spreadsheet reader.
+3. Confirm the UI↔backend contract and that storage, supply dates, partner review metadata, and in-session data privacy are preserved.
+4. Commit only production code, tests, existing documentation and any intentionally retained reproducible audit script. Remove exploratory diagnostics after their evidence is summarized. Do not commit synthetic outputs or user-specific operational files.
+5. Next gate: Week 5 size mismatch / inventory risk alerts and scenarios; do **not** turn Week 4 into a forecasting or scheduling rewrite.

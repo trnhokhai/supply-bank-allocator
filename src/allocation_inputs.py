@@ -8,6 +8,8 @@ shipments or claim historical distributions measure unconstrained need.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import numpy as np
 import pandas as pd
 
@@ -109,7 +111,7 @@ def prepare_allocation_inputs(
     fc["week_start"] = _dates(fc["week_start"], "Forecast weeks")
     if fc["week_start"].dt.weekday.ne(0).any() or fc.duplicated(WEEK_KEY).any():
         raise AllocationError("Forecast must have unique ISO-Monday child/week keys.")
-    all_weeks = sorted(pd.Timestamp(x) for x in fc["week_start"].unique())
+    all_weeks = sorted(fc["week_start"].drop_duplicates().tolist())
     selected_weeks = all_weeks[:cycle_weeks]
     if len(selected_weeks) < cycle_weeks or any(
         (selected_weeks[i] - selected_weeks[i-1]).days != 7
@@ -117,14 +119,14 @@ def prepare_allocation_inputs(
     ):
         raise AllocationError("Forecast has an incomplete or nonconsecutive cycle.")
     start = pd.Timestamp(selected_weeks[0])
-    end = pd.Timestamp(selected_weeks[-1]) + pd.Timedelta(days=6)
+    end = pd.Timestamp(pd.Timestamp(selected_weeks[-1]).date() + timedelta(days=6))
     cycle_forecast = fc.loc[fc["week_start"].isin(selected_weeks)].copy()
     coverage = cycle_forecast.groupby(CHILD)["week_start"].nunique()
     if coverage.lt(cycle_weeks).any():
         raise AllocationError("A partner/product/size forecast is missing a cycle week.")
     if "origin_week" in fc:
         origin_dates = _dates(fc["origin_week"], "Forecast origin")
-        if origin_dates.nunique() != 1 or origin_dates.iloc[0] + pd.Timedelta(days=7) != start:
+        if origin_dates.nunique() != 1 or (origin_dates.iloc[0].date() + timedelta(days=7)) != start.date():
             raise AllocationError("Forecast origin does not align with the first future week.")
 
     inv = current_inventory.copy()
@@ -203,10 +205,9 @@ def prepare_allocation_inputs(
     needs = needs.merge(metadata, on=CHILD, how="left", validate="one_to_one")
     if not needs["site_id"].isin(site_master["site_id"].astype(str)).all():
         raise AllocationError("Forecast contains partner IDs not found in the site master.")
-    stock = (on_hand.merge(incoming, on=SKUS, how="outer")
-             .fillna({"on_hand_units": 0, "confirmed_inbound_units": 0}))
-    stock["on_hand_units"] = stock["on_hand_units"].astype("int64")
-    stock["confirmed_inbound_units"] = stock["confirmed_inbound_units"].astype("int64")
+    stock = on_hand.merge(incoming, on=SKUS, how="outer")
+    for units_col in ("on_hand_units", "confirmed_inbound_units"):
+        stock[units_col] = pd.to_numeric(stock[units_col], errors="coerce").fillna(0).astype("int64")
     stock["available_units"] = stock["on_hand_units"] + stock["confirmed_inbound_units"]
     supply = stock[SKUS + ["available_units"]].sort_values(SKUS).reset_index(drop=True)
 
@@ -294,6 +295,7 @@ def run_operational_allocation(
     fairness_floor: float = 0.6,
     worst_shortfall_penalty_share: float = 0.01,
     time_limit_seconds: int = 8,
+    protect_baseline_fill: bool = True,
 ) -> dict:
     """Solve the cycle plan, then derive a stock-on-hand-only pick suggestion."""
     result = solve_allocation(
@@ -303,9 +305,11 @@ def run_operational_allocation(
         fairness_floor=fairness_floor,
         worst_shortfall_penalty_share=worst_shortfall_penalty_share,
         time_limit_seconds=time_limit_seconds,
+        protect_baseline_fill=protect_baseline_fill,
+        solver="highs",
     )
     planned = _ready_now_split(result["allocation"], prepared["on_hand"])
-    provenance = prepared["needs"].drop(columns=["need_units", "forecast_units", "requires_review"], errors="ignore")
+    provenance = prepared["needs"].drop(columns=["need_units", "forecast_units"], errors="ignore")
     additional = [column for column in provenance if column not in CHILD]
     if additional:
         planned = planned.merge(provenance[CHILD + additional], on=CHILD,
