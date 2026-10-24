@@ -1,6 +1,6 @@
-# Methods Note — Forecasting and Allocation (Gates 3–4)
+# Methods Note — Forecasting, Allocation and Inventory Alerts (Gates 3–4; Gate 5 Block 1)
 
-Updated October 16, 2026. **Applies to the ChiEAC Diaper & Period Supply Bank Allocator, not a validated measure of unmet community demand.**
+Updated October 24, 2026 (Gate 5 Block 1 added; prior historical evidence retained). **Applies to the ChiEAC Diaper & Period Supply Bank Allocator, not a validated measure of unmet community demand.**
 
 ## Purpose and units
 
@@ -112,4 +112,42 @@ The 80×20 report gave certified MIP relative gap ~`1.2e-7`, below the `1e-5` re
 
 ### Verify locally
 
-`python -m pytest -q`, followed by `python run_gate4.py --section scale` (from the root in the pinned `.venv`). In Streamlit, run **Upload → Demo Mode → Clean & Validate → Forecast → Generate forecast → Allocate → Optimize allocation**, keep the worst-partner protection checked, and open CSV exports in a spreadsheet reader. Current final cleanup tests need to be rerun on the Windows project environment before claiming Gate 4 closeout.
+`python -m pytest -q`, followed by `python run_gate4.py --section scale` (from the root in the pinned `.venv`). In Streamlit, run **Upload → Demo Mode → Clean & Validate → Forecast → Generate forecast → Allocate → Optimize allocation**, keep the worst-partner protection checked, and open CSV exports in a spreadsheet reader. **Historical October 16 instruction:** the final cleanup tests were then pending. A subsequent October 24 Windows full regression reported 346 passed, 17 warnings (including Gate 4 tests); the standalone 80×20 scale audit was not rerun as part of the Gate 5 Block 1 review.
+
+---
+
+## Gate 5 — Inventory Risk and Size-Mismatch Alerts (Block 1; October 24, 2026)
+
+This is a **synthetic/local technical and business validation**, not the entire Gate 5 scenario/purchasing acceptance and not a real supply-bank field study. It reuses canonical Week 3 future forecasts and the Gate 4 vetted cycle supply inputs.
+
+### Coverage formula and boundary semantics
+
+For one canonical SKU `k` over the first `H` consecutive forecast weeks (`1 <= H <= 8`), let `F_k` be the sum of site-level weekly *distribution-proxy* forecasts for that SKU, `D_k = F_k/H` the mean weekly forecast, `Q_k` the counted on-hand snapshot, and `I_k` the **eligible confirmed** in-cycle inbound stock prepared under Decision 037.
+
+- **On-hand WOS** = `Q_k / D_k` for a valid, positive `D_k` and a verified inventory row.
+- **Projected-cycle WOS (Brief definition)** = `(Q_k + I_k) / D_k`; this does **not** imply `I_k` is available for immediate picking.
+- Strict classifications: **short** if WOS `< short_weeks`; **long** if WOS `> long_weeks`; otherwise **adequate**. Defaults are three and 12 weeks respectively. Users can change the thresholds, with `0 <= short < long`.
+- **Complete-horizon planning gap (units)** = `ceil(max(0, F_k - (Q_k + I_k)))` for assessable SKUs. This is not an allocation unmet-need objective, and it is **not** calculated by testing WOS against the short threshold. A SKU may have 3.64 projected WOS (not short under the three-week rule) but a positive four-week supply gap.
+- Missing inventory rows are unverified, not zero physical stock; absent/zero/incomplete forecasts make WOS unavailable rather than infinite or proven demand-free. Forecast review metadata and upstream warnings are carried into the display.
+
+Confirmed deliveries count only when dated after the inventory snapshot and through the cycle end; pending, unknown-size, pre-snapshot and after-cycle supply are excluded by the existing preparation contract. An aggregate cycle calculation is **not** a week-by-week shipment schedule or an immediate pick authorization. The separate Week 4 ready-now pick draft remains on-hand-only.
+
+### Inventory-to-distribution size mismatch
+
+Within each product family, the SKU's on-hand share is `100 * Q_k / sum_family(Q)`, and its forecast distribution share is `100 * F_k / sum_family(F)`. Their difference `on_hand_mix_pct - forecast_mix_pct` is the **size-mismatch index in percentage points**. Positive values mean relatively more of that size in counted stock than in forecast distributions; negative values mean relatively less. Suppress the comparison for a family with incomplete size coverage or zero denominators. Keep newborn (`N`) as a categorical diaper size, not a numeric-axis omission.
+
+### Action interpretation and optional cost estimation
+
+Recommendations distinguish on-hand shortfall, threshold-based projected risk and positive *full-cycle* gaps. Verify forecast assumptions, partner sizes, actual receipts and existing commitments before purchasing or promising fulfillment. Eight-week supply-gap CSVs list assessed positive-gap SKUs. Entering a trusted **USD cost per individual unit** permits an illustrative estimated price of `gap units × verified unit cost`; unknown prices remain `N/A` and cannot be assumed free. This is **not** the Week 5 budgeted purchasing optimizer, which has not yet been implemented.
+
+### Reproducible synthetic checks and boundaries
+
+- Local full regression after final Block 1 patch: **346 passed, 17 warnings** (October 24, 2026 Windows `python -m pytest -q` screenshot). Remaining warnings shown were associated with the pinned PuLP/CBC reference tests, not the Alerts timedelta regression. A passing suite does not substitute for live operational checks.
+- Four-week Demo Mode: on-hand diaper N/1/2 long; 5/6 short. Size 5 had approximately **1.72 on-hand WOS**, **3.64 projected-cycle WOS**, and a **2,513-unit** complete-cycle supply gap. Both the corrected categorical mix chart and full-gap recommendation appeared in Streamlit.
+- Eight-week Demo Mode (September 28–November 22, 2026): 13 positive-gap SKUs, **55,492** total planning-gap units; diaper 4=20,862, 5=16,988, 6=9,414, 7=2,011 (49,275 total). The exported `eight_week_supply_gap_ask.csv` was read and its counts/sums checked. Unit-cost columns were all `N/A` because no prices were entered.
+- The eight-week screen showed **0 projected WOS short** under the three-week threshold **and 13 full-eight-week gap SKUs**. This is mathematically consistent. These planning gaps should not be described as independently measured unmet community demand.
+- **Still pending:** manual verified-unit-cost entry and arithmetic/CSV check; final Git diff review before committing locally; scenarios, pending-donation what-ifs, new-partner scenarios, budgeted purchasing and sub-15-second scenario benchmarks.
+
+### Verify locally
+
+From the project root in the pinned environment, run `python -m pytest -q`. In Streamlit use **Upload → Demo Mode → Clean & Validate → Forecast (4 or 8 weeks) → Generate Forecast → Alerts → Calculate alerts**. Compare on-hand vs projected-cycle statuses and positive cycle gaps. For eight-week cost verification, enter a realistic *known* unit cost in a test row, confirm the calculated subtotal and CSV, then leave unknown products unpriced. Do not publish synthetic test costs as real purchasing recommendations.

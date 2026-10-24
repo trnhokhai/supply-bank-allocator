@@ -1359,3 +1359,39 @@ CBC timed out during a seeded 80×20 run even after compacting redundant variabl
 ### Consequence
 
 Do not claim exact zero-gap optimality when gap is positive, generalized production performance from a single synthetic benchmark, or field-level benefit without a pilot. Pinned PuLP 3.3.2 emits deprecation notices in reference tests; address them through future dependency-upgrade testing rather than disabling warnings or untested API substitutions.
+
+---
+
+# Decision 040 — Two Explicit Inventory-Coverage Measures and Safe Alert Statuses
+
+**Status:** Accepted (Week 5, Block 1; synthetic/local validation)
+
+### Decision
+
+For each canonical `product × size`, expose (1) **on-hand WOS** = verified on-hand units / mean weekly forecast and (2) **projected-cycle WOS** = (verified on-hand + Gate 4 eligible confirmed inbound through cycle end) / the same mean weekly forecast. Projected-cycle WOS is the Brief's stated measure, but its inbound component cannot be treated as immediately pickable stock. Default alert boundaries are strictly **short <3 weeks** and **long >12 weeks**, independently adjustable by the user; exact boundary equality is not short/long. Preserve original input data and Week 4 supply exclusions. If the inventory row is missing or the forecast is absent, zero, incomplete or unusable, show an unassessable/review state rather than a fabricated zero, infinite WOS or long-stock classification. Retain provenance and review flags.
+
+### Rationale
+
+A supply bank needs both present physical-stock exposure and forward-looking cycle coverage; confirmed donations may make the latter look adequate while the warehouse remains short today. The synthetic on-hand benchmark is deliberately planted; it must not be altered to force the Brief's projected measure to classify the same way.
+
+### Consequence
+
+Show and label both measures; do not confuse planned availability with ready-now picks. Display coverage-threshold alerts separately from full-cycle gaps; clarify that a SKU can have >3 projected WOS yet still lack units for a four- or eight-week plan. Unknown-size and pending incoming supply must not silently enter the baseline.
+
+---
+
+# Decision 041 — Size-Mismatch, Full-Cycle Gaps and Cost-Provenance Policy
+
+**Status:** Accepted (Week 5, Block 1; synthetic/local validation)
+
+### Decision
+
+Calculate inventory and forecast distribution-size shares **within each product family**, and show their difference in **percentage points**: `mismatch_index_pp = on_hand_mix_pct - forecast_mix_pct`. Do not compare size shares across unrelated products or show a confident index for incomplete SKU coverage. For an assessed SKU, the full-cycle supply gap is `ceil(max(0, summed forecast units over selected cycle - on-hand - eligible confirmed inbound))`. This planning gap is distinct from short-threshold WOS. Recommendations may highlight either short on-hand coverage or a larger full-cycle shortage, subject to receipt-time and forecast-quality caveats. For the eight-week funding/purchase ask, use *verified user-entered unit cost per individual unit*; blank or unknown cost remains `N/A`, **not $0**, and any priced subtotal must state that unknown-cost gaps are excluded.
+
+### Rationale
+
+Synthetic Demo Mode confirmed that diaper size 5 could be above the three-week projected threshold while still lacking 2,513 units for a four-week cycle. In the eight-week exported planning ask, there were 13 positive-gap SKUs totaling 55,492 individual units. These are forecasts of distributions conditioned on historical constraints, not independently validated unmet client need, and no reliable price can be inferred from a missing cost.
+
+### Consequence
+
+Keep long/short KPIs, planning-horizon gaps, and percentage-point mix mismatch separately named. Provide actionable suggestions but do not turn forecasts into purchasing authorizations; retain source, date and physical-availability review. The interactive unit-cost estimate still requires its own manual end-to-end confirmation before that subfeature is marked verified.

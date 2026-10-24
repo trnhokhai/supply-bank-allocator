@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 9, 2026
-**Current gate:** Week 3 — Gate 3 final verification and handoff
+**Last updated:** October 24, 2026
+**Current gate:** Week 5 — Gate 5, Block 1 Inventory Alerts locally validated; closeout review pending
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1420,7 +1420,7 @@ No separate handoff document is required.
 
 ## 22. Week 4 — Gate 4 scientific and operational verification (October 16, 2026)
 
-**Current stage:** Allocation working on synthetic Demo Mode and 80-site benchmark; final cleanup regression and Git commit still pending. The preceding Week 3 state sections are preserved as historical checkpoint records.
+**Historical stage as of October 16, 2026:** Allocation working on synthetic Demo Mode and 80-site benchmark; at this checkpoint final cleanup regression and Git commit were still pending. See Section 23 for the verified later state; this entry is retained as historical evidence.
 
 ### Delivered implementation
 
@@ -1453,3 +1453,34 @@ No separate handoff document is required.
 3. Confirm the UI↔backend contract and that storage, supply dates, partner review metadata, and in-session data privacy are preserved.
 4. Commit only production code, tests, existing documentation and any intentionally retained reproducible audit script. Remove exploratory diagnostics after their evidence is summarized. Do not commit synthetic outputs or user-specific operational files.
 5. Next gate: Week 5 size mismatch / inventory risk alerts and scenarios; do **not** turn Week 4 into a forecasting or scheduling rewrite.
+
+---
+
+## 23. Week 4 reconciliation and Week 5 — Block 1 Inventory Alerts closeout review (October 24, 2026)
+
+**Current implementation stage:** Gate 4 implementation is committed to `main` at `10339a89c03b25dd94cfb7224285261aee30520b` (October 16, 2026). Its Section 22 wording that cleanup and commit were pending is retained above as an *October 16 historical checkpoint*, not today's status. The original Week 3 sections likewise remain historical. Week 5 Block 1 Alerts is implemented and validated locally but **not yet committed or pushed** as of this checkpoint. Gate 5 as a whole is **not complete**; scenarios and purchasing optimization remain to be built.
+
+### Implementation and contract continuity
+
+- Added `src/alerts.py` for SKU-level on-hand and projected-cycle weeks-of-supply (WOS), threshold alerts, within-product size-mismatch index, full-cycle supply-gap estimates, and recommendations.
+- Added `pages/4_Alerts.py` for a session-based Streamlit page, configurable short/long thresholds, product-size breakdown, paired inventory/forecast mix chart, CSV downloads and a conditional eight-week purchasing-cost planning ask.
+- Added `tests/test_alerts.py` and `tests/test_alerts_integration.py`; reused the **existing** forecast state, `prepare_allocation_inputs()` physical-supply contract, and `input_signature()` rather than creating a new supply or forecasting pipeline.
+- The on-hand measure is counted stock only. The Brief-aligned projected-cycle measure includes *eligible confirmed inbound* through the cycle end; pending, unknown-size, pre-snapshot and after-cycle shipments remain excluded. Neither metric authorizes picking future arrivals.
+- An inventory SKU without a verified on-hand row, or without a positive complete forecast, is **not** classified as available, overstocked or zero-demand; it is unassessable and reviewable. Forecast quality flags remain visible.
+
+### Locally observed verification evidence — synthetic data only
+
+- **Windows full regression:** `python -m pytest -q` reported **346 passed, 17 warnings** on October 24, 2026, after the final Alerts business-review patch. The visible remaining warnings relate to the pinned PuLP/CBC reference path; no Alerts timedelta warning appeared. No failures were reported. This does not certify untested cost-entry or real-user workflows.
+- **4-week Streamlit Demo Mode:** on-hand diaper N, 1, 2 classified long (strictly >12 WOS); 5 and 6 classified short (strictly <3 WOS). After eligible inbound, size 5 had ~3.64 projected WOS and a **2,513-unit full-four-week gap**. The gap and recommendation appeared after restarting the Streamlit Python process and recalculating.
+- **8-week Streamlit Demo Mode:** forecast cycle September 28–November 22, 2026; the exported `eight_week_supply_gap_ask.csv` contained **13 positive-gap SKUs totaling 55,492 individual units**, of which **49,275** were diaper sizes 4 (20,862), 5 (16,988), 6 (9,414), and 7 (2,011). Counts and sums were checked directly from the CSV. It is a synthetic *forecast distribution supply gap*, not independent evidence of unmet community demand.
+- At eight weeks, the dashboard reported **0 SKUs** with projected WOS strictly under three weeks, yet 13 SKUs with positive full-eight-week supply gaps. These measures are intentionally distinct (coverage threshold vs complete planning-horizon sufficiency); the UI and future funder reporting must not conflate them.
+- The diaper mix chart displayed N and sizes 1–7, with within-diaper inventory shares compared against forecast distribution shares. The two measures were not combined across product families.
+- Unit costs were left blank and the exported cost fields were `N/A`, correctly avoiding a fabricated $0 expense. **Manual entry of verified unit costs and checking the resulting cost arithmetic remains pending.**
+
+### Remaining closeout controls / limits
+
+1. Confirm the locally applied file changes and inspect the focused `git diff` before staging or committing. Do not stage unrelated scripts, exported data or test artifacts. This section records review evidence; it does not authorize a push.
+2. Manually exercise at least one valid unit-cost entry and confirm the estimated eight-week purchase-ask arithmetic plus CSV; unknown-cost items must remain unpriced, not free.
+3. Any subsequently modified Alerts code must rerun targeted tests plus the full regression and Streamlit smoke test. The October 24 test totals apply only to the validated patch used in that run.
+4. Week 4's original 80×20 benchmark remains historical synthetic evidence; this Block 1 review did not independently rerun the stand-alone `run_gate4.py --section scale` audit. Real practitioner field validation remains pending.
+5. Next: Week 5 scenarios and genuine budgeted purchasing optimization, reusing HiGHS and the fairness/baseline conventions. No stretch features have been approved.
