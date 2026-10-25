@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** October 24, 2026
-**Current gate:** Week 5 — Gate 5, Block 1 Inventory Alerts locally validated; closeout review pending
+**Current gate:** Week 5 — Gate 5, Blocks 1–2 pushed; Block 3 purchasing validated locally, Git closeout pending
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1507,3 +1507,32 @@ No separate handoff document is required.
 2. For size-mix report fractional forecast conservation separately from independently integer-rounded product-size planning need. A one-unit difference is possible; larger drift for a two-size-only shift must be investigated, not suppressed.
 3. Re-label hypothetical allocation columns as on-hand-backed and future-inbound-backed **planning** quantities. Tag CSV exports as hypothetical, never approved pick lists. Preserve Gate 4 raw solver contracts.
 4. Run targeted and full pytest after importing this refinement and perform a Streamlit smoke test of both size-mix (including one-unit audit) and new partner. Stage only Block 2 code, tests, and the existing three documentation files after diff review.
+
+---
+
+## 25. Week 5 — Block 2 Git reconciliation and Block 3 Purchasing technical/business acceptance (October 24, 2026)
+
+**Checkpoint:** Block 2 Scenarios was committed and pushed to `main` at `9915c1c`; Section 24 above records an earlier *pre-closeout* status and is preserved as historical evidence. Block 3 purchasing code, UI and tests are **locally validated but not yet committed/pushed** at this checkpoint. Gate 5 final closeout and real-world deployment are **not** claimed complete.
+
+### Implementation under review
+
+- Added `src/purchasing.py` budget-constrained, integer-unit, joint purchase-and-allocation HiGHS MILP; candidate solutions must have finite certified primary/spend relative MIP gaps. Lexicographically minimize the Gate 4 equity/worst-site objective, then spending, within a small objective-preservation tolerance. Inputs require positive USD cost per individual unit, capped quantities, an integer-cents budget and explicit price provenance.
+- Added purchasing controls/results to existing `pages/5_Scenarios.py`, plus `tests/test_purchasing.py`, `tests/test_purchasing_business.py`, and `tests/test_purchasing_integration.py`. Keep original allocation and counted inventory unchanged. Hypothetical purchased units **never** become physical received stock or a pick authorization.
+- Joint purchasing optimizes with **saved original Gate 4 fairness minima**; the optimized purchase and one-shortest-size comparator are then separately allocated by the current Gate 4 rules (which recalculate fairness minima). This purchase list is a certified candidate for the saved-floor model, **not a certificate of globally optimal purchasing under recomputed fairness minima**.
+- The purchasing MILP `objective_weighted_unmet` is the *joint candidate's* weighted unmet under saved floors; the displayed `Equity-weighted unmet` is from the separately **reoptimized** Gate 4 allocation. These values are not interchangeable (observed 49,593.25 versus 50,285.75 in the eight-week varied-price run).
+
+### Local synthetic Windows evidence (not supplier-verified)
+
+- Windows after latest purchasing benchmark audit patch: **38 targeted tests passed; 418 full-suite tests passed with 17 PuLP reference deprecation warnings**, as reported by the user. This is test and manual-demo evidence, not a field operating certificate. Earlier transient form-count test failure was fixed by testing the named scenario form rather than asserting the page contains only one form.
+- **Four-week, one shortage SKU:** saved baseline allocated 191,137; planning unmet 2,512; $200 budget; scenario-assumption $0.20 per diaper size 5 unit. Optimized and one-shortest-size both spent $200 and purchased 1,000 integer units; both reduced physical unmet by 1,000 (5 units/$) and weighted unmet by 1,529.5 (7.6475 weighted units/$). **Tie**, not purchase-efficiency superiority.
+- **Eight-week, uniform-price:** baseline allocated 331,802; unmet 55,486; worst-site fill ~83.71%; 13 shortage SKUs. At an illustrative $0.20 per individual unit for all 13, optimized spent $3,000, reduced unmet by 15,000 (5 units/$), and weighted unmet by 23,429 (7.8097 weighted units/$). One-shortest-size comparator bought only 917 period-pad overnight units for $183.40 (5 units/$; 8.5575 weighted units/$). **Physical efficiency tied** and weighted efficiency was worse; equal unit price and full marginal unit effectiveness mathematically prevent a strict physical units/$ win.
+- **Eight-week, heterogeneous retail-reference *scenario assumptions* fixed before the run:** $3,000 budget, 13 priced shortage SKUs, zero unpriced shortages. Optimized spending $3,000 bought 23,130 integer units (20,300 diaper 4, 1,912 diaper 5, 918 liners), with 23,130 physical planning-unmet reduction (**7.7100 units/$**) and 36,054.875 weighted reduction (**12.0183 weighted units/$**). The one-shortest-size comparator spent $238.42 on 917 overnight pads, reducing physical unmet by 917 (**3.8470 units/$**) and weighted unmet by 1,569.4375 (**6.5827 weighted units/$**). Worst-partner fill improved from ~83.71% to ~90.27% for the optimized reallocation. *Observed* Gate 5 physical units-per-actual-dollar criterion was exceeded in this synthetic case, **not for all possible prices or datasets**. Spending differs materially between strategies, so total impact is **not** an equal-spend comparison.
+- **Solver diagnostic for that run:** HiGHS `scipy_highs`; relative primary MIP gap ~2.77e-6, spend MIP gap ~3.33e-6 (within 1e-5 tolerance); purchasing solve ~0.8573 s (equity ~0.3016 s; cost ~0.5557 s). End-to-end Streamlit computation including two Gate 4 allocations ~1.64 s, **under 15 s on this run**. Audit reports original worst-site protection enabled. MIP certificates apply to the stated joint saved-floor model; they do not certify alternative reoptimized-floor formulations.
+
+### Open limitations and remaining closeout
+
+1. All 13 entered unit prices were **scenario assumptions/retail product proxies**, **not** verified quotes from ChiEAC vendors. Packs, minimum-order quantities, freight, taxes, lead times, budget approvals and true vendor availability are not enforced; no real purchase is authorized.
+2. Planning unmet is based on historical distribution-proxy forecasts, not independently measured community need. Forecast-quality flags and unknown survey case-to-unit capacity conversions still require operational review.
+3. The one-shortest-size comparator is intentionally a *single-SKU* rule and may leave budget unused. Performance reported per **actual** dollar spent, never described as an equal-spend controlled experiment. The tested 4-week and uniform-price cases did **not** show superiority.
+4. Before local commit: review staged/untracked files, validate the documentation patch against current file contents, run `git diff --check`, and stage only Block 3 production files, named tests and the three existing docs. Final regression already covered the latest UI code; documentation-only changes do not require rerunning the whole suite unless code changes. Confirm any subsequent code change with targeted/full tests and Streamlit smoke test.
+5. Keep future Gate 5 final acceptance, Week 6 deploy/report and practitioner review distinct from this **Block 3 local synthetic acceptance**. Do not publish field-validated claims.

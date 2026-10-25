@@ -1419,3 +1419,17 @@ Use a concise manager-readable assumptions table with original technical JSON av
 ### Consequence
 
 Staff can read the impact and assumptions without parsing JSON, while analysts retain enough evidence to reproduce what was submitted. These display/export labels confer no picking, purchasing, or delivery authorization. Block 2 refinement acceptance awaits Windows full regression and UI smoke tests.
+
+## Decision 044 — Budgeted purchasing, reoptimization and baseline provenance (October 24, 2026)
+
+**Status:** Accepted for synthetic Gate 5 Block 3 testing; no real purchasing authorization.
+
+### Decision
+
+Purchasing is a **genuine integer decision** with positive cent-denominated unit costs, purchase caps, SKU supply, optional verified individual-unit site capacity limits and an explicit budget. Use the existing SciPy/HiGHS backend. Joint purchase/allocation follows the original Gate 4 equity-weighted unmet plus worst-site shortfall objective, using the original saved Gate 4 minimum fairness floors and optional original worst-site protection. Among outcomes within a small tolerance of the primary objective incumbent, minimize purchase spending as a second lexicographic solve, never by an untested tiny cost coefficient. Require valid MIP-gap certificates and explicit integer, material-balance and cost checks.
+
+### Rationale and consequences
+
+Re-run the purchased-supply scenario and the one-shortest-size comparator independently through production Gate 4 rules; do not assume purchasing makes unrealized stock pickable. Distinguish the joint MILP's candidate objective from the **post-reoptimization** weighted unmet shown to users. The saved-floor purchasing candidate is not guaranteed globally optimal if fairness floors are recomputed as a function of post-purchase supply.
+
+Benchmark **physical planning unmet reduction per actual USD spent** against purchasing only the shortest projected-WOS size; equity-weighted reduction per USD is separately reported. The comparator can stop after filling its sole SKU, so an equal-budget **limit** need not yield equal **spending**. Do not force synthetic cost inputs to show a win, and do not claim broad or field superiority from one favorable heterogeneous-price run. Verified supplier quotes, pack quantities, shipping, lead time, budget authorization and actual receipt all remain required for operational procurement.

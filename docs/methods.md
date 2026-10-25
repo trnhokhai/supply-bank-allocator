@@ -168,3 +168,31 @@ From the project root in the pinned environment, run `python -m pytest -q`. In S
 - Existing October 24 manual Streamlit synthetic trials observed no-change consistency, donation -20/-50/+50, pending arrivals, diaper 2→5 size-mix and a prospective shelter partner (peer-sites=5). Observed runtimes were 0.63–0.88 seconds, below Gate 5's **15-second scenario target on those runs**. This does not prove performance for every network scale or configuration.
 - Windows before this refinement: **374 passed, 17 warnings**, reported following the dropdown fix. **Final refinement regression remains pending**. Run `python -m pytest -q tests/test_scenarios.py tests/test_scenarios_integration.py` then full `python -m pytest -q`. In Streamlit, verify the submitted assumptions summary, collapsed audit JSON, rounded need disclosure on diaper size-mix 2→5, new-partner provisional metadata, and explicitly hypothetical CSV export.
 - Budget-constrained purchasing is a separate Gate 5 Block 3 deliverable; it is **not** claimed as implemented here. Field use and practitioner feedback remain pending.
+
+## Gate 5 — Budgeted Purchasing Optimization (Block 3; October 24, 2026)
+
+### Model and cost validity
+
+Let `p_k` be nonnegative integer purchase units for SKU `k`, `c_k` its positive USD *per individual unit* represented exactly as integer cents, `B` the scenario budget in cents, `u_sk` integer partner/SKU unmet planning units, and `z` worst-site shortfall rate. Joint purchasing solves:
+
+- `sum_k c_k p_k <= B`, with explicit maximum quantities for each priced SKU and no treating a blank or invalid price as free.
+- `sum_s (need_sk - u_sk) <= available_cycle_supply_k + p_k`, with site-level verified individual-unit capacity constraints when supplied, original saved fairness minima, and optionally protected original worst-partner fill.
+- Primary objective: Gate 4 `sum_sk equity_weight_s * u_sk + penalty_share * total_need * z`. Secondary objective: minimize purchase cost while preserving the primary feasible incumbent to a tight objective tolerance; both solves require acceptable HiGHS relative MIP-gap certificates (`<= 1e-5` within numerical tolerance).
+- Purchased units remain **hypothetical plan supply**; neither on-hand physical inventory, receipt status nor approved pick lists are changed.
+
+### Reoptimization, benchmark and measurement provenance
+
+The purchase MILP fixes fairness minima from the saved original Gate 4 result. It returns a certified candidate under those floors. Displayed purchase and shortest-size comparison allocations are then solved again using **current Gate 4 fairness rules**, which may recompute floors. Accordingly, the technical `objective_weighted_unmet` is the *joint candidate* and need not equal the `Equity-weighted unmet` in the displayed reoptimized Gate 4 result (observed 49,593.25 versus 50,285.75). Do not claim global purchasing optimality for a model with recomputed fairness floors without a corresponding proof or formulation.
+
+For both strategies, compute reductions against the **same saved original operational plan**. `physical reduction/$ = (original physical unmet - scenario physical unmet) / actual USD spent`; analogously for equity-weighted reduction/$. Zero spending produces N/A, not infinite performance. The one-shortest-size comparator purchases a single shortest-WOS SKU, subject to its gap, cap and budget, then stops; it can spend materially less than the optimizer. Report actual spend for each and avoid implying equal-spend causal comparison. The Brief's primary observed test is strictly **higher physical reduction per actual dollar**, with the run completing under 15 seconds; weighted per-dollar performance is additional decision evidence.
+
+### Synthetic benchmark outcomes (Windows Streamlit)
+
+- Four weeks, one shortage SKU, $200 at a scenario-only $0.20/unit: both strategies bought 1,000 diaper size-5 units, attained 5 physical units/$ and 7.6475 weighted units/$; a **tie**.
+- Eight weeks, 13 shortage SKUs, same scenario $0.20/unit throughout: optimizer spent $3,000 vs comparator $183.40; both attained 5 physical units/$; weighted 7.8097 vs 8.5575. Under these equal prices and full unit effectiveness, a strict physical per-dollar advantage is mathematically impossible.
+- Eight weeks, *predeclared heterogeneous retail-reference scenario assumptions* (not vendor quotes), $3,000 budget: optimized 23,130 units of physical planning unmet reduced, **7.7100 physical units/$**, **12.0183 weighted units/$**, worst-site fill ~90.27%; comparator 917 units for $238.42, **3.8470 physical units/$**, **6.5827 weighted units/$**. Streamlit elapsed ~1.64 s, purchasing HiGHS ~0.8573 s, MIP gaps ~2.77e-6 and ~3.33e-6. This demonstrates the stated benchmark **in that synthetic run only**.
+- Latest local Windows tests reported: **38 focused passed, 418 full-suite passed, 17 pre-existing PuLP reference deprecation warnings**. Treat as evidence for the tested local code, not a guarantee under different inputs, vendor prices or larger networks.
+
+### Operational exclusions
+
+Unit prices are **assumptions** unless accompanied by verifiable supplier quotes. The present MILP does not implement supplier pack multiples, MOQ, shipping, taxes, delivery calendars or vendor purchase authorization. A future purchased shipment cannot be counted as physical ready-to-pick stock until verified receipt. Reconsider all outcomes if missing/flagged forecasts, case-unit storage capacity or demand provenance materially changes. Keep primary model and post-reoptimization result distinct in export/audit narratives.

@@ -6,10 +6,12 @@ stock count, or allocatable ready-now pick list.
 
 import pandas as pd
 import streamlit as st
+from time import perf_counter
 
 from src.allocation_ui import csv_download, input_signature
 from src.forecast_ui import data_signature, validate_forecast_table
 from src.scenarios import ScenarioError, run_counterfactual
+from src.purchasing import PurchasingError, evaluate_purchase_scenario, assess_purchase_benchmark
 
 def _has_current_demand_audit(payload: object) -> bool:
     """Only display results produced under the current scenario schema.
@@ -85,8 +87,193 @@ kind_labels = {
     "pending_confirmed": "What if pending arrivals become confirmed?",
     "size_mix": "Demand size-mix shift",
     "new_partner": "Prospective new partner",
+    "purchase_budget": "Purchase budget optimization",
 }
 kind = st.selectbox("Scenario", list(kind_labels), format_func=lambda x: kind_labels[x])
+
+# The purchase scenario has a dedicated form and result path. Other scenarios
+# remain unchanged and continue to use the original scenario engine below.
+if kind == "purchase_budget":
+    st.info(
+        "Hypothetical budget scenario only. Enter a positive cost per INDIVIDUAL unit for "
+        "SKUs you actually want to price. Blank means unpriced and excluded, NOT $0. "
+        "A scenario assumption is not a verified supplier quotation. Purchased units are "
+        "NOT counted as on-hand stock and do not authorize receiving, picking or shipping."
+    )
+    prepared = original["prepared"]
+    need = prepared["needs"].groupby(["product", "size"], as_index=False)["need_units"].sum()
+    stock = prepared["supply"][["product", "size", "available_units"]].copy()
+    grid = need.merge(stock, on=["product", "size"], how="left", validate="one_to_one")
+    grid["available_units"] = grid["available_units"].fillna(0).astype(int)
+    grid["shortage_units"] = (grid["need_units"] - grid["available_units"]).clip(lower=0)
+    grid = grid.loc[grid["shortage_units"].gt(0)].sort_values(["product", "size"]).reset_index(drop=True)
+    if grid.empty:
+        st.info("No shortage SKUs in this planning cycle. There is no unmet supply gap to purchase against.")
+        st.stop()
+    st.caption(
+        f"Pricing candidates: {len(grid)} shortage SKUs in the saved "
+        f"{period['cycle_weeks']}-week plan. Shortage is a planning gap, "
+        "not independently measured community demand."
+    )
+    default_quotes = grid[["product", "size", "shortage_units"]].copy()
+    default_quotes["unit_cost_usd"] = float("nan")
+    default_quotes["max_purchase_units"] = default_quotes["shortage_units"].astype(int)
+    default_quotes["price_basis"] = "scenario_assumption"
+    submitted_purchase = False
+    with st.form("g5_purchase_controls", clear_on_submit=False):
+        budget_usd = st.number_input(
+            "Hypothetical purchasing budget (USD)", min_value=0.0,
+            value=3000.0, step=100.0, format="%.2f",
+        )
+        quote_editor = st.data_editor(
+            default_quotes,
+            hide_index=True, num_rows="fixed", width="stretch",
+            disabled=["product", "size", "shortage_units"],
+            key=f"g5_purchase_editor_{period['cycle_weeks']}_{signature}",
+            column_config={
+                "product": st.column_config.TextColumn("Product"),
+                "size": st.column_config.TextColumn("Size"),
+                "shortage_units": st.column_config.NumberColumn("Cycle shortage (units)", format="%d"),
+                "unit_cost_usd": st.column_config.NumberColumn(
+                    "Unit cost (USD)", min_value=0.01, step=0.01, format="$%.2f", required=False,
+                    help="One individual unit, not a pack. Blank = not priced.",
+                ),
+                "max_purchase_units": st.column_config.NumberColumn(
+                    "Max purchasable units", min_value=0, step=1, format="%d", required=True,
+                    help="Explicit SKU quantity cap; defaults to forecast supply gap.",
+                ),
+                "price_basis": st.column_config.SelectboxColumn(
+                    "Price basis", options=["scenario_assumption", "verified_quote"], required=True,
+                    help="Choose verified_quote only if the entered price is backed by a real supplier quote.",
+                ),
+            },
+        )
+        st.caption("If a supplier sells only in packs, convert its price to USD per individual unit. "
+                   "The current model does not enforce pack multiples, minimum orders or shipping costs; "
+                   "those purchasing constraints require review before acting.")
+        submitted_purchase = st.form_submit_button("Optimize hypothetical purchase budget", type="primary", width="stretch")
+    if submitted_purchase:
+        try:
+            active = quote_editor.loc[quote_editor["unit_cost_usd"].notna()].copy()
+            if active.empty:
+                raise PurchasingError("Enter at least one positive USD unit cost; blank SKUs are excluded.")
+            quotes = active[["product", "size", "unit_cost_usd", "max_purchase_units", "price_basis"]].copy()
+            start = perf_counter()
+            with st.spinner("Optimizing purchasing and re-solving Gate 4 allocations for both strategies..."):
+                evaluated = evaluate_purchase_scenario(original, quotes, budget_usd, time_limit_seconds=6)
+            elapsed = perf_counter() - start
+            st.session_state["g5_purchase_result"] = {
+                "baseline_id": id(original), "source_signature": signature,
+                "cycle_weeks": period["cycle_weeks"], "evaluated": evaluated,
+                "elapsed_seconds": elapsed, "budget_usd": budget_usd,
+                "quotes": quotes.copy(),
+            }
+        except (PurchasingError, ValueError, TypeError, KeyError, RuntimeError) as exc:
+            st.session_state.pop("g5_purchase_result", None)
+            st.error(f"No safe purchasing scenario was produced: {exc}")
+            st.stop()
+    purchase_saved = st.session_state.get("g5_purchase_result")
+    if (purchase_saved is None or purchase_saved.get("baseline_id") != id(original)
+            or purchase_saved.get("source_signature") != signature
+            or purchase_saved.get("cycle_weeks") != period["cycle_weeks"]):
+        st.info("Enter hypothetical budget and unit prices, then click Optimize. The original plan is unchanged.")
+        st.stop()
+    st.subheader("3 · Budgeted purchasing outcomes")
+    st.caption("These results reflect the LAST completed Optimize action. Unsubmitted input edits do not update them.")
+    elapsed = purchase_saved["elapsed_seconds"]
+    if elapsed >= 15:
+        st.error(f"Total recomputation took {elapsed:.2f}s. Gate 5 requires under 15s; this run does NOT pass the performance gate.")
+    else:
+        st.caption(f"Total computation including purchasing and both Gate 4 allocation solves: {elapsed:.2f}s (<15s).")
+    result = purchase_saved["evaluated"]
+    orig = result["original_metrics"]
+    joint = result["joint_summary"]
+    shortest = result["shortest_summary"]
+    def display_efficiency(value):
+        return "N/A (no spending)" if value is None else f"{value:,.4f}"
+    comparison = pd.DataFrame([
+        {"Metric":"Spend (USD)", "Original":0.0, "Optimized purchase":joint["spent_usd"], "Shortest-size-only":shortest["spent_usd"]},
+        {"Metric":"Allocated units", "Original":orig["total_allocated_units"], "Optimized purchase":joint["allocated_units"], "Shortest-size-only":shortest["allocated_units"]},
+        {"Metric":"Unmet units", "Original":orig["total_unmet_units"], "Optimized purchase":joint["unmet_units"], "Shortest-size-only":shortest["unmet_units"]},
+        {"Metric":"Equity-weighted unmet", "Original":orig["weighted_unmet_units"], "Optimized purchase":joint["weighted_unmet_units"], "Shortest-size-only":shortest["weighted_unmet_units"]},
+        {"Metric":"Worst-partner fill (%)", "Original":100*orig["worst_site_fill_rate"], "Optimized purchase":joint["worst_site_fill_pct"], "Shortest-size-only":shortest["worst_site_fill_pct"]},
+        {"Metric":"Physical unmet reduction (units)", "Original":0, "Optimized purchase":joint["physical_unmet_reduction_units"], "Shortest-size-only":shortest["physical_unmet_reduction_units"]},
+        {"Metric":"Equity-weighted unmet reduction (units)", "Original":0, "Optimized purchase":joint["equity_weighted_unmet_reduction_units"], "Shortest-size-only":shortest["equity_weighted_unmet_reduction_units"]},
+        {"Metric":"Physical reduction / actual USD", "Original":"N/A", "Optimized purchase":display_efficiency(joint["physical_reduction_per_usd"]), "Shortest-size-only":display_efficiency(shortest["physical_reduction_per_usd"])},
+        {"Metric":"Weighted reduction / actual USD", "Original":"N/A", "Optimized purchase":display_efficiency(joint["weighted_reduction_per_usd"]), "Shortest-size-only":display_efficiency(shortest["weighted_reduction_per_usd"])},
+    ])
+    # Keep presentation columns homogeneous strings so Streamlit / Arrow does
+    # not infer mixed numeric / "N/A" types and crash when serializing.
+    for column in ["Original", "Optimized purchase", "Shortest-size-only"]:
+        comparison[column] = comparison[column].map(
+            lambda value: f"{value:,.4f}" if isinstance(value, (float, int)) else str(value)
+        )
+    st.dataframe(comparison, hide_index=True, width="stretch")
+    audit = assess_purchase_benchmark(
+        joint, shortest, purchase_saved["quotes"], purchase_saved["budget_usd"], elapsed
+    )
+    if audit["uniform_cost_full_effectiveness_tie"]:
+        st.info(
+            "Mathematical ceiling in this test: all entered unit prices are identical and "
+            "each purchased unit resolves one planning unmet unit for both strategies. "
+            "Therefore PHYSICAL unmet reduction per actual dollar must tie at "
+            "1 / unit cost. Changing only the budget cannot establish per-dollar superiority. "
+            "These are scenario costs, not verified supplier quotes."
+        )
+    if abs(audit["spend_difference_usd"]) > 0.01:
+        st.caption(
+            f"Budget-use comparability: optimized spends ${joint['spent_usd']:,.2f}; "
+            f"the one-shortest-size comparator spends ${shortest['spent_usd']:,.2f}. "
+            "The comparator stops after filling ONE SKU, so it can leave a large part "
+            "of the same budget unused. Per-dollar rates use each strategy's ACTUAL spend; "
+            "total impact is not an equal-spend comparison."
+        )
+    if audit["gate5_per_dollar_and_speed_observed"]:
+        st.success(
+            "Gate 5 Brief's PHYSICAL unmet-reduction-per-actual-dollar benchmark and "
+            "under-15-second runtime are met in this synthetic run. Equity-weighted "
+            "per-dollar performance is assessed separately; this is not purchasing authorization."
+        )
+    else:
+        st.warning(
+            "Gate 5 purchase efficiency has NOT yet been demonstrated: optimized PHYSICAL "
+            "unmet reduction per actual dollar must strictly exceed the one-shortest-size "
+            "comparator, within 15 seconds. A tie is not superiority. Do not adjust "
+            "synthetic inputs or unit prices merely to force a pass."
+        )
+    if not audit["equity_weighted_per_dollar_superior"]:
+        st.caption(
+            "Equity diagnostic: optimized purchasing did not beat the comparator in "
+            "weighted unmet reduction per dollar. This is not the Brief's primary Gate 5 "
+            "per-dollar benchmark, but it is important to report to decision-makers."
+        )
+    st.caption(
+        "The joint purchasing MILP uses original Gate 4 fairness minima; "
+        "both displayed allocation outcomes are independently re-solved with current Gate 4 fairness rules. "
+        "The purchase list is a certified candidate under the saved minimum-floor model, "
+        "not a proof of global optimum under recomputed floors. "
+        "All reductions are against the same original operational baseline."
+    )
+    st.markdown("#### Hypothetical buy list")
+    buy = result["joint_model"]["purchases"].copy()
+    st.dataframe(buy[["product","size","price_basis","unit_cost_usd","purchase_units","purchase_cost_usd"]], hide_index=True, width="stretch")
+    st.caption(f"Budget: ${purchase_saved['budget_usd']:,.2f} · Spent: ${joint['spent_usd']:,.2f} · "
+               f"Remaining: ${result['joint_model']['remaining_cents']/100:,.2f} · "
+               f"Unpriced shortage SKUs: {result['joint_model']['unpriced_skus_with_gap']}")
+    st.markdown("#### Shortest-size-only comparison purchase")
+    comparator = result["shortest_size_purchase"].copy()
+    st.dataframe(comparator.loc[comparator["purchase_units"].gt(0)], hide_index=True, width="stretch")
+    st.download_button("Download hypothetical buy list (CSV)",
+        csv_download(buy.assign(plan_status="HYPOTHETICAL_NOT_PURCHASE_AUTHORIZATION")),
+        file_name="hypothetical_purchase_NOT_ORDER.csv", mime="text/csv")
+    st.download_button("Download purchasing comparison (CSV)", csv_download(comparison),
+        file_name="purchasing_comparison.csv", mime="text/csv")
+    with st.expander("Technical optimization diagnostics / audit", expanded=False):
+        technical = {k: v for k, v in result["joint_model"].items()
+                     if k not in {"purchases", "joint_allocation_candidate"}}
+        st.json(technical)
+    st.warning("HYPOTHETICAL ONLY. Purchases require funding, vendor quote, order/pack/lead-time review, actual receiving and stock verification. On-hand snapshot and approved ready-to-pick list remain unchanged.")
+    st.stop()
 
 # Streamlit forms batch widget values until the form is submitted.  A product
 # selector inside this form would leave the dependent size dropdowns showing

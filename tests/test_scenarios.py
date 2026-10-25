@@ -199,8 +199,20 @@ def test_size_mix_family_selector_is_outside_form():
                      and isinstance(item.context_expr.func, ast.Attribute)
                      and item.context_expr.func.attr == "form"
                      for item in node.items)]
-    assert len(forms) == 1
-    form = forms[0]
+    # Other independent workflows (such as purchasing) can have their own
+    # forms. Verify the specific size-mix scenario form, not the page-wide count.
+    scenario_forms = [
+        node for node in forms
+        if any(
+            isinstance(item.context_expr, ast.Call)
+            and item.context_expr.args
+            and isinstance(item.context_expr.args[0], ast.Constant)
+            and item.context_expr.args[0].value == "gate5_scenario_controls"
+            for item in node.items
+        )
+    ]
+    assert len(scenario_forms) == 1
+    form = scenario_forms[0]
     family = selectboxes(tree, "Product family")
     assert len(family) == 1
     assert family[0].lineno < form.lineno
