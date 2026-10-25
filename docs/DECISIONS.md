@@ -1395,3 +1395,27 @@ Synthetic Demo Mode confirmed that diaper size 5 could be above the three-week p
 ### Consequence
 
 Keep long/short KPIs, planning-horizon gaps, and percentage-point mix mismatch separately named. Provide actionable suggestions but do not turn forecasts into purchasing authorizations; retain source, date and physical-availability review. The interactive unit-cost estimate still requires its own manual end-to-end confirmation before that subfeature is marked verified.
+
+## Decision 042 — Scenario baseline, demand conservation and integer rounding (October 24, 2026)
+
+### Decision
+
+Start each what-if from the **saved original Gate 4 operational allocation**, not a reconstructed baseline. Apply a single prospective change to copies of cleaned inputs and rerun the verified HiGHS backend with the same fairness settings and verified unit capacity overrides. A separate *scenario-specific proportional comparator* is evaluated on the scenario's own constraints; it must not be mislabeled as the original plan. For supply-only changes, integer demand must be unchanged. For two-size mix transfer, conserve fractional site-week forecast demand but separately audit rounded integer planning totals. Gate 4 uses network-SKU largest-remainder rounding; a +/-1 unit change in aggregate integer need can follow independent rounding of the two changed SKU totals. Do not alter real planning need numbers to fake conservation.
+
+### Rationale
+
+The observed diaper 2→5 transfer conserved 2,758.38 expected units shifted but changed network integer planning need from 193,649 to 193,650. The extra integer unit is a rounding artifact, not new forecast demand, and it changes the allocation + unmet identity.
+
+### Consequence
+
+Display both continuous and rounded-demand deltas and assert the conservation bounds. For addition of a hypothetical new partner, the demand denominator changes; avoid causal interpretation of raw cross-network deltas. Recompute and comparisons are not shipments or verified community demand.
+
+## Decision 043 — Scenario assumptions and physical-availability presentation (October 24, 2026)
+
+### Decision
+
+Use a concise manager-readable assumptions table with original technical JSON available via a collapsed audit expander. In hypothetical allocation displays and CSV, call `ready_now_units` **on-hand-backed planning units** and `awaiting_inbound_units` **future-inbound-backed planning units**, leaving the underlying Gate 4 fields unchanged. CSV receives an explicit hypothetical/not-pick-authorized status. Do not imply pending/promoted or hypothetical donations have physically arrived.
+
+### Consequence
+
+Staff can read the impact and assumptions without parsing JSON, while analysts retain enough evidence to reproduce what was submitted. These display/export labels confer no picking, purchasing, or delivery authorization. Block 2 refinement acceptance awaits Windows full regression and UI smoke tests.

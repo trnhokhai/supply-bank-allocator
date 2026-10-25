@@ -1484,3 +1484,26 @@ No separate handoff document is required.
 3. Any subsequently modified Alerts code must rerun targeted tests plus the full regression and Streamlit smoke test. The October 24 test totals apply only to the validated patch used in that run.
 4. Week 4's original 80×20 benchmark remains historical synthetic evidence; this Block 1 review did not independently rerun the stand-alone `run_gate4.py --section scale` audit. Real practitioner field validation remains pending.
 5. Next: Week 5 scenarios and genuine budgeted purchasing optimization, reusing HiGHS and the fairness/baseline conventions. No stretch features have been approved.
+
+---
+
+## 24. Week 5 — Block 2 Scenarios pre-closeout review (October 24, 2026)
+
+**Current stage:** Block 1 is committed/pushed to `main` at `ce01512` (the earlier Section 23 "not pushed" wording is a historical checkpoint). Block 2 Scenarios is in the local Windows working tree as a **candidate**; final refinement regression, updated UI smoke test, diff review, and Git commit/push remain **pending**. Block 3 purchasing optimization is not implemented. Do not label Gate 5 complete.
+
+### Observed synthetic scenario checks before final refinement
+
+- Windows before final refinement: 374 tests passed / 17 warnings after the size-mix dropdown patch, as reported by the user. Remaining displayed warnings were pinned PuLP reference deprecations. This is **not** a result for the refinement candidate.
+- Four-week original Allocate baseline: 191,137 allocated, 2,512 integer planning unmet; worst-site fill ~98.27%. Zero-donation-change re-solve matched the original metric values; 0.88 s recompute.
+- `Community Donations` 27 eligible confirmed rows (42,202 original units): -20% changed incoming by -8,441, -50% by -21,094, +50% by +21,108 with deterministic per-row rounding; scenario runtimes 0.76, 0.74 and 0.63 s, respectively. Only staff-verified donation sources are allowed.
+- Pending scenario: 13 eligible pending rows / 30,232 units assumed confirmed, with 204 ineligible pending records remaining. Four-week unmet decreased from 2,512 to 1,724; recompute 0.73 s. Such arrivals remain hypothetical, **not** physically picked stock.
+- Size-mix demo: 20% diaper size 2 → size 5 shift, fractional forecast conserved, 100 affected site-weeks; re-optimization 0.72 s. Independently rounded integer planning total rose by one unit (193,649 → 193,650); do **not** represent integer planning need as exactly conserved. The refinement adds an explicit math audit without rewriting Gate 4 rounding rules.
+- Hypothetical new shelter partner serving 100 families/month: same-agency 5-peer scaling, 6,407.48 expected cycle units, ~6,408 rounded planning units, `requires_review=True`, no historical WAPE invented. Network partner count increases from 25 to 26; recompute 0.75 s. Raw network KPIs are not like-for-like when a new partner enters.
+- After Block 1 manual price-entry test: 16,988 diaper-size-5 gap units at **synthetic test-only** $0.20 produced $3,397.60; unpriced SKUs remained unpriced. Neither this price nor any prospective scenario is a verified field purchasing recommendation.
+
+### Final refinement acceptance (pending Windows validation)
+
+1. Translate the scenario assumptions JSON into a manager-readable summary while retaining raw JSON in a collapsed audit expander.
+2. For size-mix report fractional forecast conservation separately from independently integer-rounded product-size planning need. A one-unit difference is possible; larger drift for a two-size-only shift must be investigated, not suppressed.
+3. Re-label hypothetical allocation columns as on-hand-backed and future-inbound-backed **planning** quantities. Tag CSV exports as hypothetical, never approved pick lists. Preserve Gate 4 raw solver contracts.
+4. Run targeted and full pytest after importing this refinement and perform a Streamlit smoke test of both size-mix (including one-unit audit) and new partner. Stage only Block 2 code, tests, and the existing three documentation files after diff review.

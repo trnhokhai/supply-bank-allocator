@@ -151,3 +151,20 @@ Recommendations distinguish on-hand shortfall, threshold-based projected risk an
 ### Verify locally
 
 From the project root in the pinned environment, run `python -m pytest -q`. In Streamlit use **Upload → Demo Mode → Clean & Validate → Forecast (4 or 8 weeks) → Generate Forecast → Alerts → Calculate alerts**. Compare on-hand vs projected-cycle statuses and positive cycle gaps. For eight-week cost verification, enter a realistic *known* unit cost in a test row, confirm the calculated subtotal and CSV, then leave unknown products unpriced. Do not publish synthetic test costs as real purchasing recommendations.
+
+## Gate 5 — What-if Scenario Methods (Block 2; October 24, 2026)
+
+### Baseline and counterfactual calculations
+
+- Original operational plan = persisted, signature-checked Gate 4 Allocate result. Scenario optimized = a re-solve after a single changed assumption. Scenario proportional = independent comparison **under the scenario's new conditions**, not the original plan.
+- Supply-only: staff-verified named confirmed donation source scaled within snapshot→cycle arrival window (deterministic half-up rounding per record); or eligible pending arrivals assumed confirmed **only in the scenario copy**. Historical distribution forecast remains unchanged. Future arrivals do not become physical stock or an approved pick list.
+- Size-mix: transfer a specified share of one product/size forecast to another within the **same partner-week**. The sum of fractional expected units is conserved. Affected child error/band metadata is invalidated and flagged prospective; no new historical model fit is claimed.
+- Integer planning: Gate 4 converts expected cycle totals to integer units using product-size network-total rounding and largest-remainder distribution across sites. Even when the fractional size-mix transfer is conserved, independently rounded totals for the two changed sizes can produce an aggregate **+/-1 integer unit** difference. The separate demand audit records both figures; neither supply nor the solver is modified to conceal it.
+- New partner: explicitly acknowledged survey-only or hypothetical partner, based on peer scaling with provisional, not-backtested provenance. Adding a partner changes total planning demand, worst-site fill population and potentially the fairness comparison denominator.
+- UI summaries show assumptions **applied in the last run**; audit JSON remains available. Hypothetical on-hand-backed and future-inbound-backed planning allocations are **not** shipping commitments. Export adds a not-pick-authorized status.
+
+### Synthetic evidence and remaining tests
+
+- Existing October 24 manual Streamlit synthetic trials observed no-change consistency, donation -20/-50/+50, pending arrivals, diaper 2→5 size-mix and a prospective shelter partner (peer-sites=5). Observed runtimes were 0.63–0.88 seconds, below Gate 5's **15-second scenario target on those runs**. This does not prove performance for every network scale or configuration.
+- Windows before this refinement: **374 passed, 17 warnings**, reported following the dropdown fix. **Final refinement regression remains pending**. Run `python -m pytest -q tests/test_scenarios.py tests/test_scenarios_integration.py` then full `python -m pytest -q`. In Streamlit, verify the submitted assumptions summary, collapsed audit JSON, rounded need disclosure on diaper size-mix 2→5, new-partner provisional metadata, and explicitly hypothetical CSV export.
+- Budget-constrained purchasing is a separate Gate 5 Block 3 deliverable; it is **not** claimed as implemented here. Field use and practitioner feedback remain pending.
