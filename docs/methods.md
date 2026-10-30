@@ -196,3 +196,23 @@ For both strategies, compute reductions against the **same saved original operat
 ### Operational exclusions
 
 Unit prices are **assumptions** unless accompanied by verifiable supplier quotes. The present MILP does not implement supplier pack multiples, MOQ, shipping, taxes, delivery calendars or vendor purchase authorization. A future purchased shipment cannot be counted as physical ready-to-pick stock until verified receipt. Reconsider all outcomes if missing/flagged forecasts, case-unit storage capacity or demand provenance materially changes. Keep primary model and post-reoptimization result distinct in export/audit narratives.
+
+
+## Gate 6 — Reporting provenance and Partner Intake Survey (October 30, 2026)
+
+### Report data contract
+
+- **Observed window:** The eight historical ISO weeks ending in the forecast-origin week; historical distributed units are summed from cleaned transaction rows, not imputed weekly observations. Count distinct partners observed in that window. A reported historical period may include a partial final ISO week; record this caution.
+- **Planning window:** Exactly eight consecutive future ISO weeks, Monday through Sunday, using the existing saved eight-week Gate 4 plan. Never extend a four-week forecast by multiplication or copy. Input validation checks forecast origin, inventory snapshot, allocation period and SKU-level supply consistency.
+- **Integer need / allocation:** Aggregate the existing modeled eight-week weekly distribution-proxy forecast by partner/product/size under Gate 4 rounding; modeled unmet units = integer planning need minus optimized allocated units. This is a planning measure, not independently surveyed unmet community need. Report unresolved forecasts as review warnings rather than treating missing forecasts as confirmed zero need.
+- **Size-level supply ask:** For each SKU, positive gap = max(0, modeled integer forecast need minus eligible on-hand-plus-confirmed-cycle supply). This is different from optimized allocation shortfall if site capacities or constraints leave supply unallocated; avoid promising a one-unit purchase removes one unit of modeled unmet.
+- **Equity:** A partner is classed high need if organization-level survey reports a poverty-share band of at least 50% or at least one priority-population flag. Classifiable lower-need requires known lower poverty band and known flag absence; otherwise unknown. High-need share = planned units allocated to classified high-need sites / all modeled allocated units. Separately show classification coverage. If all classifiable partners are high need, even a 100% high-need share is descriptive and **not proof of equity improvement**.
+- **Families/children:** Sum only recorded historical household/child service counts when supplied, and label them non-deduplicated counts/entries. Survey's monthly families estimates are not observed unique families served and must not be substituted for missing realized counts.
+- **Prices:** Individual-unit cost in USD must be positive and explicit, labeled verified quote or scenario assumption. Incomplete SKU pricing gives a partial priced subtotal and **unknown full dollar total**, never zero by default. Neither the PDF nor a hypothetical purchase scenario is an order or supplier quotation.
+
+### PDF and integration method
+
+- `src/report.py` validates/aggregates; `src/report_pdf.py` renders one-page US Letter via in-memory `fpdf2` vector primitives, avoiding browser-dependent Plotly image export. `pages/6_Report.py` provides Streamlit UI. Real preview and synthetic tiny/full-dataset tests are separate acceptance evidence; on a public deployment, confirm downloads and error behavior again.
+- `src/survey_session.py` maps Google Forms display labels to canonical survey inputs, preserves ZIP text, upserts/replaces survey entries explicitly and runs the existing Pandera/cleaning/site-master pipeline. Validation of optional entirely-null text fields uses object-typed nullable values. `pages/7_Survey.py` submits form and CSV imports and invalidates dependent session results.
+- A new survey-only partner's demand uses peer-calibrated cold start and provisional `survey_based` flags, with no fabricated historical WAPE. Users must regenerate Forecast and Allocate after edits before using the funder report.
+- All observed validation in this checkpoint uses controlled synthetic data. No practitioner responses, operational distribution outcomes or public deploy performance are claimed.

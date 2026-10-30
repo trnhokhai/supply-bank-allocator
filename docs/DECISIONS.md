@@ -1433,3 +1433,34 @@ Purchasing is a **genuine integer decision** with positive cent-denominated unit
 Re-run the purchased-supply scenario and the one-shortest-size comparator independently through production Gate 4 rules; do not assume purchasing makes unrealized stock pickable. Distinguish the joint MILP's candidate objective from the **post-reoptimization** weighted unmet shown to users. The saved-floor purchasing candidate is not guaranteed globally optimal if fairness floors are recomputed as a function of post-purchase supply.
 
 Benchmark **physical planning unmet reduction per actual USD spent** against purchasing only the shortest projected-WOS size; equity-weighted reduction per USD is separately reported. The comparator can stop after filling its sole SKU, so an equal-budget **limit** need not yield equal **spending**. Do not force synthetic cost inputs to show a win, and do not claim broad or field superiority from one favorable heterogeneous-price run. Verified supplier quotes, pack quantities, shipping, lead time, budget authorization and actual receipt all remain required for operational procurement.
+
+
+## Decision 045 — Eight-week funder reporting consumes the existing allocation contract (October 30, 2026)
+
+**Status:** Accepted for Week 6 synthetic demonstration; not independently field-validated.
+
+### Decision
+
+Require an eight-week saved Gate 4 allocation and canonical forecast provenance already associated with the current cleaned session inputs. Reporting is read-only: no second forecasting engine, allocation solver or implicit four-to-eight-week extrapolation. Reconcile `allocated + modeled unmet = integer planning need` and distinguish this partner allocation shortfall from a size-level aggregate forecast-versus-available-supply gap. Historical distribution quantities and logged household/child service-count sums are observed records, not independently established unique families/children or unconstrained community need. A survey's approximate monthly families served is a scale estimate, not verified realized service.
+
+High-need classification is based on available organization-level survey poverty-share and priority-population indicators. Unknown classification remains unknown, not automatically low need; high-need allocation share is based on **modeled allocated units** and cannot be represented as actual distribution or a causal fairness improvement. For unit-dollar requests require explicit positive per-individual-unit prices and provenance (`verified_quote` vs `scenario_assumption`). Missing prices make the complete dollar total unavailable, not free. All PDF conclusions remain conditional on source quality and modeled assumptions.
+
+### Rationale and consequence
+
+One defensible reporting contract avoids two competing demand or optimizer interpretations, preserves the user's chosen baseline, and supplies traceable eight-week outputs to the nonprofit director. Keep projection, observation and scenario columns visibly distinct; reject stale or incomplete inputs rather than fabricating a number.
+
+## Decision 046 — Direct PDF vector rendering for Gate 6 funder chart (October 30, 2026)
+
+**Status:** Accepted for Week 6 V1.
+
+Use the existing `fpdf2` dependency for a one-page US Letter PDF with deterministic vector size-gap visualization and in-memory download. No new Chrome/Chromium, headless browser or Kaleido dependency is needed for this reporting chart. This changes the illustrative Plotly-image rendering approach, **not** the chart/report requirement. Test both large and tiny synthetic inputs for exactly one readable page; screen/visual review is separate from the page-count test. Unicode bank-name limitations in the current core-font PDF implementation remain explicit and must be addressed before claims of universal language support.
+
+## Decision 047 — Survey edits reuse the canonical contract and invalidate derived plans (October 30, 2026)
+
+**Status:** Accepted for Week 6 V1.
+
+Streamlit form and Google Forms CSV inputs normalize to the same canonical `partner_survey` data contract. Required fields remain `site_name`, `zip_code`, `agency_type`, `families_served_per_month`; all other fields are optional. Preserve leading-zero ZIP strings. Normalize supported human-readable choices; reject unknown or ambiguous product/size or categories rather than guessing. For imported records, default **upsert** on normalized partner name; full **replace** is explicitly chosen. Revalidate all retained + changed partner records before replacing session state. Use the existing site-identity reconciliation, cold-start and equity pathways, with no client-level sensitive information. Survey saves are session-only; downstream forecasts and allocations require regeneration after changes.
+
+### Rationale and consequence
+
+A single validated data contract prevents silent schema drift and stale model results. Export is required to carry session-only edits to a future session. An undated synthetic survey can be used in retrospective demo only with an explicit warning; it is not historical backtest evidence.

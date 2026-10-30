@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 24, 2026
-**Current gate:** Week 5 — Gate 5, Blocks 1–2 pushed; Block 3 purchasing validated locally, Git closeout pending
+**Last updated:** October 30, 2026
+**Current gate:** Week 6 — Gate 6 checkpoints 6A–6C locally verified; 6D public deployment and 6E acceptance outstanding
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1536,3 +1536,29 @@ No separate handoff document is required.
 3. The one-shortest-size comparator is intentionally a *single-SKU* rule and may leave budget unused. Performance reported per **actual** dollar spent, never described as an equal-spend controlled experiment. The tested 4-week and uniform-price cases did **not** show superiority.
 4. Before local commit: review staged/untracked files, validate the documentation patch against current file contents, run `git diff --check`, and stage only Block 3 production files, named tests and the three existing docs. Final regression already covered the latest UI code; documentation-only changes do not require rerunning the whole suite unless code changes. Confirm any subsequent code change with targeted/full tests and Streamlit smoke test.
 5. Keep future Gate 5 final acceptance, Week 6 deploy/report and practitioner review distinct from this **Block 3 local synthetic acceptance**. Do not publish field-validated claims.
+
+---
+
+## 26. Week 5 Git reconciliation and Week 6 Gate 6A–6C local checkpoint (October 30, 2026)
+
+**Current technical status as of this checkpoint:** The last verified remote `main` commit was `851e29a61662dd6aa5dc9b05f89316013145c12e`, which includes Gate 5 Block 3 purchasing. Earlier Week 5 text claiming Block 3 was not yet pushed is historical, not the current remote status. Formal Gate 5 administrative acceptance is not asserted. Week 6 source and tests were staged for review locally; the remote branch had **not** yet been updated at this checkpoint.
+
+### Implemented locally, awaiting reviewed Git commit
+
+- **6A — Reporting data contract:** `src/report.py` and `tests/test_report.py`. Consumes the existing saved, valid eight-week allocation and cleaned historical distribution; does not rerun forecasting/optimization or mutate inputs. Checks consistent periods, inventory, supply, unit conservation, survey-derived high-need classification, missing prices, and provenance. Requires explicitly eight future consecutive weeks; no four-to-eight-week extrapolation.
+- **6B — Funder PDF:** `src/report_pdf.py`, `pages/6_Report.py`, `tests/test_report_pdf.py`. Generates an in-memory one-page US Letter report, chart and download from the checked report contract using `fpdf2` PDF vector drawing (no browser/Chrome/Kaleido required for this reporting chart). A full synthetic example was exported and visually inspected; small synthetic fixture also tested. Missing prices yield an unavailable total-dollar ask, not zero cost.
+- **6C — Survey integration:** `src/survey_session.py`, `pages/7_Survey.py`, `tests/test_survey_session.py`. Organization-level form and Google Forms CSV import reuse canonical mapping, `prepare_input`, validation and `build_derived_outputs`. Import preserves leading-zero ZIPs; default upsert retains existing partners while updating matching names. Survey edits are session-only and invalidate stale downstream plans.
+
+### Locally reported evidence (not deployed/field-verified)
+
+- Windows `.venv`: **452 passed, 17 existing PuLP reference-path deprecation warnings, 0 failures**, reported October 30. The 6C Google Forms missing-optional-text dtype issue was corrected and the entire regression rerun. `git diff --cached --check` reported no problems for the eight newly staged files (LF-to-CRLF Windows notices on `git add` are informational only).
+- Streamlit synthetic demo: built-in survey added `Week 6 Test Shelter`, bringing current survey record count from 25 to 26. The regenerated eight-week forecast showed 26 partner sites, 2,888 weekly rows, `survey_based` method for the new partner, N/A WAPE, and explicit retrospective synthetic-proxy review flags.
+- Google Forms synthetic one-row import: non-replacing upsert reported 27 current survey records. Raw preview preserved ZIP `02108`, mapped agency type and approximate families; no real practitioner survey response is implied.
+- Sample eight-week funder PDF: observed distribution units 366,842 across 25 distribution-log partners; modeled planning shortfall 55,486 units (13 positive-gap SKUs); all 13 were unpriced, and the total USD ask was unavailable. These are synthetic data/estimated planning results **not actual field outcomes**, independently measured community need, unique families, or verified supplier quotes. An observed 100% high-need allocation-share metric in this synthetic case does **not** prove fairness improvement because all classified modeled partners were high-need.
+
+### Outstanding Gate 6 work
+
+1. Final privacy/public-facing copy edits before deployment: make synthetic-demo provenance prominent, clarify that modeled equity coverage is descriptive (not proof of improvement), and label recorded household/child counts as non-deduplicated counts.
+2. **6D:** improve landing page, download guidance, desktop/mobile usability, Streamlit Community Cloud deploy and cold-load benchmark (target <10 seconds, measured on public URL rather than assumed from local speed). Inspect error behavior and memory/session handling on Linux.
+3. **6E:** full public Demo Mode walkthrough, synthetic 3-partner/eight-week one-page acceptance PDF, feedback requests to at least two practitioners, public LinkedIn project update, documented evidence and final Gate 6 acceptance review. Do not invent responses or assert that feedback requests were sent until they actually were.
+4. Review and commit only the approved Week 6 code/tests and these three existing documentation files. Historical untracked Gate 4 helpers/patches must remain unstaged. Do not claim any remote push in this checkpoint before checking GitHub.
