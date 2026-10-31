@@ -14,6 +14,10 @@ st.caption(
     "Generate a one-page eight-week planning report. Historical distribution, modeled allocations, "
     "provisional shortfall, and proposed funding requests are explicitly distinguished."
 )
+st.warning(
+    "The Demo Mode dataset is entirely synthetic. A report from user-uploaded files "
+    "remains unverified until a supply bank checks the source data and assumptions."
+)
 
 
 def _guide(message: str, destination: str, label: str):
@@ -91,6 +95,16 @@ else:
     )
 
 with st.form("g6_report_form"):
+    data_context = st.radio(
+        "Report data source (shown clearly inside the PDF)",
+        options=["synthetic_demo", "user_supplied_unverified"],
+        format_func=lambda value: (
+            "Synthetic demonstration (Demo Mode / test data)"
+            if value == "synthetic_demo" else
+            "User-supplied operational files (not independently verified)"
+        ),
+        help="Choose user-supplied ONLY for your own files. This does not certify their accuracy.",
+    )
     bank_name = st.text_input("Bank name (optional; defaults to Supply Bank)", value="Supply Bank", max_chars=120)
     logo_file = st.file_uploader("Optional logo (PNG/JPEG, up to 2 MB)", type=["png", "jpg", "jpeg"])
     if not base.empty:
@@ -129,7 +143,10 @@ if create:
             expected_signature=current_signature, prices=prices,
         )
         logo_bytes = logo_file.getvalue() if logo_file is not None else None
-        payload = render_funder_pdf(report, bank_name=bank_name.strip() or "Supply Bank", logo=logo_bytes)
+        payload = render_funder_pdf(
+            report, bank_name=bank_name.strip() or "Supply Bank", logo=logo_bytes,
+            data_context=data_context,
+        )
         detail = report["ask_by_sku"].to_csv(index=False, na_rep="Not priced").encode("utf-8-sig")
         st.session_state["g6_report_pdf"] = {
             "signature": current_signature,
@@ -138,6 +155,7 @@ if create:
             "full_ask_csv": detail,
             "warnings": report["warnings"],
             "pricing": report["pricing"],
+            "data_context": data_context,
         }
     except (ReportError, ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
         st.session_state.pop("g6_report_pdf", None)
@@ -151,6 +169,10 @@ if output and (output.get("signature") != current_signature or output.get("plan_
 if output:
     st.caption("The files below reflect the LAST successful Generate action. Unsubmitted edits do not change them.")
     st.success("Your one-page, eight-week report is ready.")
+    if output.get("data_context") == "synthetic_demo":
+        st.info("The downloaded PDF is prominently marked as synthetic demonstration data.")
+    else:
+        st.info("The downloaded PDF identifies its source as unverified user-supplied data.")
     p = output["pricing"]
     if p["fully_costed_ask_usd"] is None:
         st.warning("Some product-size prices are missing: total funding dollars are intentionally unavailable.")

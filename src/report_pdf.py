@@ -28,6 +28,11 @@ TEAL = (24, 119, 129)
 PALE = (238, 246, 246)
 HAIR = (217, 226, 230)
 WHITE = (255, 255, 255)
+DATA_CONTEXT_LABELS = {
+    "synthetic_demo": "SYNTHETIC DEMONSTRATION - NOT REAL BANK RESULTS",
+    "user_supplied_unverified": "USER-SUPPLIED DATA - NOT INDEPENDENTLY VERIFIED",
+    "unspecified": "DATA ORIGIN NOT VERIFIED",
+}
 
 
 def _ascii(value: object) -> str:
@@ -190,9 +195,16 @@ def _price_label(row) -> str:
 
 
 def render_funder_pdf(report: dict, *, bank_name: str = "Supply Bank", logo: bytes | None = None,
-                      generated_on: date | datetime | None = None) -> bytes:
-    """Render the validated report as in-memory PDF bytes (never write uploads to disk)."""
+                      generated_on: date | datetime | None = None,
+                      data_context: str = "unspecified") -> bytes:
+    """Render the validated report as in-memory PDF bytes (never write uploads to disk).
+
+    Data origin is supplied by the Report UI and is visibly disclosed. The
+    default intentionally makes no claim about the source's authenticity.
+    """
     _validate(report)
+    if data_context not in DATA_CONTEXT_LABELS:
+        raise ReportError("Choose a supported data-source disclosure for the report.")
     clean_name = _ascii(bank_name).strip()
     if not clean_name or len(clean_name) > 120:
         raise ReportError("Enter a bank name between 1 and 120 characters.")
@@ -215,6 +227,9 @@ def render_funder_pdf(report: dict, *, bank_name: str = "Supply Bank", logo: byt
     max_header_w = PAGE_W-MARGIN*2-(84 if logo_stream else 0)
     _text(pdf, MARGIN, 53, clean_name, size=17.5, style="B", color=WHITE, max_w=max_header_w)
     _text(pdf, MARGIN, 70, "8-WEEK FUNDER PLANNING SNAPSHOT", size=8.7, color=WHITE)
+    # This statement is visible within the document, not just the Streamlit UI.
+    _text(pdf, MARGIN, 94, DATA_CONTEXT_LABELS[data_context], size=7.0,
+          style="B", color=(155, 82, 34), max_w=PAGE_W-2*MARGIN)
 
     period = report["periods"]
     _text(pdf, MARGIN, 104, f"Observed distributions: {_date(period['historical_start'])} - {_date(period['historical_end'])}", size=8.2, color=INK)
@@ -232,9 +247,9 @@ def render_funder_pdf(report: dict, *, bank_name: str = "Supply Bank", logo: byt
 
     households = obs["reported_household_service_count_sum"]
     children = obs["reported_child_service_count_sum"]
-    parts = [f"Recorded household service-count entries: {_fmt(households)}" if households is not None else "Household service counts: unavailable",
-             f"Child service-count entries: {_fmt(children)}" if children is not None else "Child service counts: unavailable"]
-    _text(pdf, MARGIN, 207, "  |  ".join(parts), size=7.5, color=MUTED, max_w=PAGE_W-2*MARGIN)
+    parts = [f"Sum of recorded household service counts: {_fmt(households)}" if households is not None else "Household service counts: unavailable",
+             f"sum of child service counts: {_fmt(children)}" if children is not None else "Child service counts: unavailable"]
+    _text(pdf, MARGIN, 207, "  |  ".join(parts), size=7.0, color=MUTED, max_w=PAGE_W-2*MARGIN)
     _text(pdf, MARGIN, 219, "Service counts are recorded entries, NOT deduplicated unique families or children.", size=7.1, color=MUTED)
 
     left_w = 333
@@ -251,7 +266,15 @@ def render_funder_pdf(report: dict, *, bank_name: str = "Supply Bank", logo: byt
     _text(pdf, rx+10, 325, "Classification coverage", size=7.1, style="B", color=NAVY)
     _text(pdf, rx+10, 340, "N/A" if cov is None else f"{cov:.1f}% of modeled allocated units", size=7.5, color=MUTED, max_w=rw-20)
     _text(pdf, rx+10, 365, f"High-need partners: {eq['classified_high_need_partners']}", size=7.3, color=INK)
-    _text(pdf, rx+10, 384, "Planned, not actual delivery", size=6.6, color=MUTED)
+    all_high = (plan.get("modeled_partners") is not None
+                and plan["modeled_partners"] > 0
+                and eq.get("unknown_classification_partners") == 0
+                and eq["classified_high_need_partners"] == plan["modeled_partners"])
+    if all_high:
+        _text(pdf, rx+10, 380, "All partners high-need;", size=6.5, color=MUTED)
+        _text(pdf, rx+10, 390, "100% is NOT an improvement claim", size=6.2, color=MUTED, max_w=rw-20)
+    else:
+        _text(pdf, rx+10, 384, "Planned, not actual delivery", size=6.6, color=MUTED)
 
     _text(pdf, MARGIN, 421, "SPECIFIC SUPPLY REQUEST BY PRODUCT / SIZE", size=10.2, style="B", color=NAVY)
     if pricing["sku_gaps"] == 0:
