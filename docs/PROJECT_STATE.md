@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** October 30, 2026
-**Current gate:** Week 6 — Gate 6 checkpoints 6A–6C locally verified; 6D public deployment and 6E acceptance outstanding
+**Last updated:** November 1, 2026
+**Current gate:** Week 6 — 6E technical acceptance evidenced (3-site PDF, 460 tests, deployed workflow, user-reported mobile and under-10-second load); outreach and LinkedIn post pending
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1562,3 +1562,59 @@ No separate handoff document is required.
 2. **6D:** improve landing page, download guidance, desktop/mobile usability, Streamlit Community Cloud deploy and cold-load benchmark (target <10 seconds, measured on public URL rather than assumed from local speed). Inspect error behavior and memory/session handling on Linux.
 3. **6E:** full public Demo Mode walkthrough, synthetic 3-partner/eight-week one-page acceptance PDF, feedback requests to at least two practitioners, public LinkedIn project update, documented evidence and final Gate 6 acceptance review. Do not invent responses or assert that feedback requests were sent until they actually were.
 4. Review and commit only the approved Week 6 code/tests and these three existing documentation files. Historical untracked Gate 4 helpers/patches must remain unstaged. Do not claim any remote push in this checkpoint before checking GitHub.
+
+---
+
+## 27. Week 6E — Hosted Gate 6 evidence and remaining checks (October 31, 2026)
+
+**Evidence basis:** User-provided Windows test output, screenshots from the deployed Streamlit Community Cloud app, and a generated PDF from the hosted app. This section is a *checkpoint*, not unconditional Gate 6 signoff; no confidential/real bank data or practitioner feedback is asserted.
+
+### Git and reproducibility
+
+- Public URL: https://chieac-supply-bank-allocator.streamlit.app/
+- Deployed source: `main`, commit `b157b9d29664fb3ca28096093425177d67418fba` (October 31, 2026).
+- Last user-reported Windows full regression before 6E: **459 passed, 17 pre-existing PuLP reference deprecation warnings, zero failures**. Additional 6E three-site report test is *pending a fresh local run*; do not retroactively add it to 459.
+- Week 6A–6D code and documentation were committed/pushed. Earlier sections describing local-only status are historical checkpoint snapshots.
+
+### Hosted synthetic demo: evidence confirmed from screenshots / exported PDF
+
+- Public landing page and sidebar displayed correctly. Upload/Demo Mode cleaning succeeded (distribution: 24,422 uploaded and cleaned rows, 733 corrected, 0 dropped in the visible synthetic screen).
+- Cloud 8-week forecast generated **2,728 weekly rows covering 25 partner sites in 15.68 seconds**. This is *forecast computation time*, not first-page cold-load latency. The screenshot showed 176 review rows and 2,552 rows with a provisional plausible range.
+- Cloud 8-week Gate 4 plan: **331,802 allocated units; 55,486 modeled planning unmet; 239,704 on-hand-backed planning units; 92,098 future confirmed-inbound-backed planning units**. Solver `scipy_highs`, certified relative MIP gap approximately 2.2e-7 in the user-visible output. This is not a physical picking authorization.
+- Hosted Alerts inventory-coverage dashboard, size-mix chart and recommended-action panels displayed. One shown selection reported 2 on-hand short SKUs, 3 on-hand long, zero projected-cycle short, 3 projected-cycle long and zero unassessable. These are threshold classifications, not the 8-week supply-gap count.
+- A hosted donation -20% what-if recomputed in about **0.48 seconds**, with allocated units **331,802 -> 327,068** and unmet units **55,486 -> 60,220**. **Caveat:** screenshot selected both `Community Donations` and `Planned Purchase` while affirming donation sources, so this run is not clean evidence of donor-only provenance. A subsequent run selecting only verified donation-source names is recommended.
+- Hosted Survey page displayed current 25 synthetic partner records and entry fields. Local form save, survey-to-cold-start forecasting, and Google Forms CSV import were validated before deployment. Hosted write/import transaction remains a separate unverified check if claiming complete Cloud survey workflow.
+- Hosted PDF downloaded and was inspected: **one US Letter page**, clear synthetic-data label, 25 historical partners, 366,842 historical units, 55,486 eight-week modeled shortfall, 13 positive-gap SKUs, unknown total USD due to missing prices, and explicit high-need 100%-is-not-improvement disclaimer. Synthetic planning outputs are not verified operational outcomes.
+
+### Gate 6 acceptance still pending (never infer PASS)
+
+1. **Three-partner, eight-week PDF case:** existing `tests/test_report.py::case` has *actual A/B/C partner rows and an eight-week saved plan*. New cross-module PDF test added by the 6E patch needs Windows pytest evidence. Distinguish this synthetic fixture acceptance from an end-to-end uploaded three-site Streamlit run.
+2. **Cold-load <10 seconds:** not measured. Forecast runtime (15.68s) is *not* cold-load time. Record browser/device/network and first-visible functional UI time, and distinguish browser first visit from wake-up after server hibernation; do not claim a true server-cold PASS without a verified cold-start sample.
+3. **Phone usability:** pending a physical/mobile browser smoke test (sidebar, page navigation, scrolling, Demo Mode start, optional PDF download). Desktop screenshots do not establish mobile usability.
+4. **Practitioner feedback:** send the public URL to **at least two relevant practitioners**, with three questions: what would you change, what do you not trust, and would you use it next month? Log dated outgoing evidence and replies without inventing recipients or answers.
+5. **Week 6 LinkedIn progress update:** public link and request for one demo-mode suggestion are required by the Brief; publication evidence is pending.
+6. **Every-page cloud proof:** basic Cloud UI verified for all named pages; complete cloud save/import and all scenario variants were not exhaustively retested. No claim of production security audit or real bank client validation.
+
+**Next action:** gather these remaining Gate 6 acceptance records; review changed files and rerun `python -m pytest -q`. If source code is unchanged, no new implementation feature is necessary. Week 7 (Nov 2–8) handles pilot feedback and handoff documentation; final hard deadline is Nov 13, 2026.
+
+---
+
+## 28. Week 6E — Technical acceptance evidence update (November 1, 2026)
+
+**Evidence and provenance:** User-supplied screenshots and console output, November 1, 2026. This updates the earlier, still-preserved Section 27 *pending-evidence checkpoint*. No new modeling implementation was needed. The public URL remains https://chieac-supply-bank-allocator.streamlit.app/ and the deployed Week 6D code is at `b157b9d29664fb3ca28096093425177d67418fba` until this documentation-only update is committed.
+
+### Technical results now reported
+
+- **Three actual synthetic partner sites, eight weeks:** `tests/test_report.py` reports **15 passed** after adding the cross-module test that uses the A/B/C partner fixture and its saved eight-week allocation, then invokes the FPDF renderer and verifies a single US Letter PDF page. This is an automated three-site PDF integration test, *not* evidence of a fresh three-site upload through the hosted Streamlit UI.
+- **Full Windows regression:** `python -m pytest -q` reports **460 passed, 0 failed, 17 warnings** in 62.49 seconds. Remaining warnings originate in the pre-existing PuLP/CBC reference path. `git diff --check` reported no whitespace errors, only Windows LF-to-CRLF notices.
+- **Hosted Cloud synthetic workflow:** Earlier user screenshots and exported report establish successful Upload/Clean, eight-week Forecast, Allocate, Alerts, a what-if Scenarios recomputation, Survey UI display, and one-page Report PDF download. Data and model outputs are synthetic, not independently established community need. The scenario demo selected `Planned Purchase` as well as `Community Donations` while asserting sources were donations; do **not** treat that particular run as clean donation-only provenance evidence.
+- **Load performance:** User reports a genuine **under-10-second cold load** on the public app. Exact elapsed seconds, device/network, and how server hibernation/wake was established were *not* recorded. This is **user-reported manual performance evidence**, not an independent, instrumented server-cold certification or service-level guarantee.
+- **Mobile usability:** User reports that opening and using the public app on a physical phone looked OK. Device/browser and particular page-by-page checks were not recorded, so treat this as a **user-reported smoke pass**, not a complete accessibility or responsive-layout audit.
+
+### Gate 6 items still open
+
+1. **Practitioner outreach:** send the live demo link and the three Brief questions to at least two relevant practitioners, and log recipient, date/channel, plus sent evidence. Replies must not be invented.
+2. **Week 6 LinkedIn progress post:** publish (if approved) with live URL and invite one useful suggestion, then record link/date. Do not report it as published before verification.
+3. **Formal closeout:** share link, one-page synthetic PDF sample, caveats, and test evidence with Benjamin and distinguish documented user-reported load/mobile checks from instrumented performance proof. Record any requested corrections; no new stretch features are authorized.
+
+Week 7 (Nov 2–8) covers feedback triage, user guide, onboarding checklist, demo video, and handoff; final project stop remains Nov 13, 2026.

@@ -57,6 +57,6 @@ Python, Streamlit, pandas, pandera, statsforecast/statsmodels, SciPy/HiGHS, PuLP
 
 ## Status / credit
 
-**Week 6A–6C:** Report contract, PDF and survey implemented and verified locally; **Week 6D** is undergoing public-readiness and deployment validation. Field practitioner review remains a separate workstream.
+**Week 6 technical checks:** Deployed Cloud core synthetic workflow, including the eight-week report PDF, passed manual smoke checks. On November 1, Windows regression reported **460 passed, 17 existing PuLP deprecation warnings**, with a genuine three-partner/eight-week report-to-PDF integration test. The user reported a **sub-10-second page load** and usable mobile interface (specific measurement and device details were not recorded; server wake-up was not independently certified). **Week 6 Gate closeout remains pending** two practitioner outreach requests, LinkedIn progress update, and formal acceptance. Public demo: https://chieac-supply-bank-allocator.streamlit.app/. These are synthetic planning demonstrations, not verified bank outcomes or supplier quotes.
 
 Built by **Khai Tran** as a ChiEAC Fellow, Chicago Education Advocacy Cooperative. MIT licensed.

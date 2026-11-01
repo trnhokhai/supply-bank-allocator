@@ -206,3 +206,24 @@ def test_prepared_operational_warnings_survive_in_report(case):
     ])
     result = build(sample)
     assert "Inventory snapshot is over 14 days old." in result["warnings"]
+
+
+def test_three_actual_partner_sites_eight_week_report_renders_one_pdf_page(case):
+    """Gate 6: pass a genuine 3-site, 8-week 6A fixture through the PDF renderer.
+
+    Unlike a PDF-only fixture with three SKU rows, the source dataset and
+    saved allocation here both contain three distinct partner sites A/B/C.
+    """
+    import re
+    from datetime import date
+    from src.report_pdf import render_funder_pdf
+
+    report = build(case)
+    assert report["observed"]["partners_with_distributions"] == 3
+    assert report["planning"]["modeled_partners"] == 3
+    assert report["periods"]["forecast_weeks"] == 8
+    pdf_bytes = render_funder_pdf(
+        report, generated_on=date(2026, 10, 31), bank_name="Tiny Test Bank"
+    )
+    assert pdf_bytes.startswith(b"%PDF")
+    assert len(re.findall(rb"/Type\s*/Page\b", pdf_bytes)) == 1
