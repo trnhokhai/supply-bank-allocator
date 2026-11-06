@@ -21,6 +21,14 @@ Open **Upload**, enable **Demo Mode**, click **Clean & Validate**, then navigate
 
 The Demo Mode datasets are synthetic. CSV/XLSX uploads also support column mapping and validation; partner survey records can be added through the built-in form or imported from Google Forms CSV. See `docs/data_dictionary.md`, `docs/methods.md`, and `docs/partner_survey_spec.md` for the source contracts and caveats.
 
+## Guides for nonprofit staff
+
+- [Practical User Guide with genuine synthetic-app screenshots](docs/user_guide.md) - first-run workflow, how to read results, safe operational review and common errors.
+- [Free Nonprofit Onboarding Checklist](docs/onboarding_checklist.md) - source-data readiness, a 60-minute training outline and review/sign-off worksheet.
+- [Data Dictionary](docs/data_dictionary.md), [Partner Survey Specification](docs/partner_survey_spec.md) and [Methods Note](docs/methods.md) - exact input fields, survey choices and analytical limits.
+
+Shareable Word and PDF versions of the first two guides are maintained separately as handoff artifacts; these Markdown files are the version-controlled text reference. All pictured data are synthetic or intentionally fictitious. They are **not** evidence of field implementation.
+
 ## Features
 
 - **Upload**: clean, validate and reconcile distribution logs, inventory snapshots, incoming supply and optional partner surveys.
@@ -58,5 +66,7 @@ Python, Streamlit, pandas, pandera, statsforecast/statsmodels, SciPy/HiGHS, PuLP
 ## Status / credit
 
 **Week 6 technical checks:** Deployed Cloud core synthetic workflow, including the eight-week report PDF, passed manual smoke checks. On November 1, Windows regression reported **460 passed, 17 existing PuLP deprecation warnings**, with a genuine three-partner/eight-week report-to-PDF integration test. The user reported a **sub-10-second page load** and usable mobile interface (specific measurement and device details were not recorded; server wake-up was not independently certified). **Week 6 Gate closeout remains pending** two practitioner outreach requests, LinkedIn progress update, and formal acceptance. Public demo: https://chieac-supply-bank-allocator.streamlit.app/. These are synthetic planning demonstrations, not verified bank outcomes or supplier quotes.
+
+**Week 7 update (November 6, 2026):** CP7.1 added automatic synthetic / uploaded / mixed / unknown-source PDF labeling and prevents reuse of old planning reports after input changes. The latest **user-run Windows local regression** reported 474 passed, zero failed and 17 previously existing PuLP warnings, with three local provenance smoke checks. This is **not** independent cloud acceptance or proof of field validation. Three practitioner feedback requests containing the live demo URL were verified sent November 2, after the earlier November 1 Week 6 checkpoint; replies and Benjamin's formal acceptance remain unverified. Guide and onboarding documentation are being finalized under CP7.2; the clean-machine setup-under-10-minutes benchmark remains to be independently measured.
 
 Built by **Khai Tran** as a ChiEAC Fellow, Chicago Education Advocacy Cooperative. MIT licensed.

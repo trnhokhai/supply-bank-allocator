@@ -1,4 +1,4 @@
-# Methods Note — Forecasting, Allocation and Inventory Alerts (Gates 3–4; Gate 5 Block 1)
+# Methods Note — Forecasting, Allocation, Alerts, Scenarios and Reporting (Gates 3–6)
 
 Updated October 24, 2026 (Gate 5 Block 1 added; prior historical evidence retained). **Applies to the ChiEAC Diaper & Period Supply Bank Allocator, not a validated measure of unmet community demand.**
 
@@ -146,7 +146,7 @@ Recommendations distinguish on-hand shortfall, threshold-based projected risk an
 - Four-week Demo Mode: on-hand diaper N/1/2 long; 5/6 short. Size 5 had approximately **1.72 on-hand WOS**, **3.64 projected-cycle WOS**, and a **2,513-unit** complete-cycle supply gap. Both the corrected categorical mix chart and full-gap recommendation appeared in Streamlit.
 - Eight-week Demo Mode (September 28–November 22, 2026): 13 positive-gap SKUs, **55,492** total planning-gap units; diaper 4=20,862, 5=16,988, 6=9,414, 7=2,011 (49,275 total). The exported `eight_week_supply_gap_ask.csv` was read and its counts/sums checked. Unit-cost columns were all `N/A` because no prices were entered.
 - The eight-week screen showed **0 projected WOS short** under the three-week threshold **and 13 full-eight-week gap SKUs**. This is mathematically consistent. These planning gaps should not be described as independently measured unmet community demand.
-- **Still pending:** manual verified-unit-cost entry and arithmetic/CSV check; final Git diff review before committing locally; scenarios, pending-donation what-ifs, new-partner scenarios, budgeted purchasing and sub-15-second scenario benchmarks.
+- **Historical Gate 5 Block 1 checkpoint (October 24, superseded by later work):** at that time manual verified-unit-cost and arithmetic/CSV review, scenarios, new-partner and budgeted-purchasing tests, final diff review and sub-15-second what-if checks were still pending. Later Gate 5 sections below document subsequent implementation and synthetic evidence.
 
 ### Verify locally
 
@@ -166,8 +166,8 @@ From the project root in the pinned environment, run `python -m pytest -q`. In S
 ### Synthetic evidence and remaining tests
 
 - Existing October 24 manual Streamlit synthetic trials observed no-change consistency, donation -20/-50/+50, pending arrivals, diaper 2→5 size-mix and a prospective shelter partner (peer-sites=5). Observed runtimes were 0.63–0.88 seconds, below Gate 5's **15-second scenario target on those runs**. This does not prove performance for every network scale or configuration.
-- Windows before this refinement: **374 passed, 17 warnings**, reported following the dropdown fix. **Final refinement regression remains pending**. Run `python -m pytest -q tests/test_scenarios.py tests/test_scenarios_integration.py` then full `python -m pytest -q`. In Streamlit, verify the submitted assumptions summary, collapsed audit JSON, rounded need disclosure on diaper size-mix 2→5, new-partner provisional metadata, and explicitly hypothetical CSV export.
-- Budget-constrained purchasing is a separate Gate 5 Block 3 deliverable; it is **not** claimed as implemented here. Field use and practitioner feedback remain pending.
+- **Historical Gate 5 Block 2 checkpoint (October 24; not the current test status):** Windows then reported **374 passed, 17 warnings** following the dropdown fix; the final refinement regression was still pending at that checkpoint. Its verification instructions were `python -m pytest -q tests/test_scenarios.py tests/test_scenarios_integration.py` and full `python -m pytest -q`, plus a Streamlit assumptions/CSV smoke review. See subsequent local test evidence below and the Week 7 addendum.
+- **Historical Gate 5 Block 2 statement:** budget-constrained purchasing was the following Block 3 deliverable, **not yet claimed implemented at this earlier checkpoint**. The later Block 3 model and synthetic verification are documented immediately below. Field use and practitioner feedback remain pending.
 
 ## Gate 5 — Budgeted Purchasing Optimization (Block 3; October 24, 2026)
 
@@ -216,3 +216,11 @@ Unit prices are **assumptions** unless accompanied by verifiable supplier quotes
 - `src/survey_session.py` maps Google Forms display labels to canonical survey inputs, preserves ZIP text, upserts/replaces survey entries explicitly and runs the existing Pandera/cleaning/site-master pipeline. Validation of optional entirely-null text fields uses object-typed nullable values. `pages/7_Survey.py` submits form and CSV imports and invalidates dependent session results.
 - A new survey-only partner's demand uses peer-calibrated cold start and provisional `survey_based` flags, with no fabricated historical WAPE. Users must regenerate Forecast and Allocate after edits before using the funder report.
 - All observed validation in this checkpoint uses controlled synthetic data. No practitioner responses, operational distribution outcomes or public deploy performance are claimed.
+
+## Week 7 documentation addendum — source provenance and release-status interpretation (November 6, 2026)
+
+- **PDF origin classification (CP7.1):** Upload records input provenance by successfully validated dataset; direct partner-survey entry or imported survey data can cause a mixed-source session. The Report derives the classification rather than taking a user-selected label. The four labels cover **synthetic demo**, **user-uploaded/unverified**, **mixed synthetic/user-supplied**, and **unknown/unverified origin**. These labels describe source handling, **not** independent verification of operational accuracy. Changing validated inputs or surveys invalidates dependent saved outputs so an old report cannot silently survive a new planning session.
+- **Evidence level:** User-run Windows regression on November 6 reported **474 passed, zero failed, 17 pre-existing PuLP reference deprecation warnings**. Local smoke testing showed the synthetic and mixed labels and rejection of stale results after re-cleaning. This addendum does **not** assert that this documentation session independently reran pytest or the public hosted interface.
+- **Historical performance is run-specific:** Prior 25-site synthetic Gate 4 benchmark reported approximately **3.18% lower equity-weighted unmet with worst-site fill protected but unchanged at 98.27%**. A later screenshot of another eight-week synthetic cycle showed **1.67% lower weighted planning unmet** with both worst-site fills rounded to **83.7%**. Do not combine these as the same experiment or claim a measurable increase in a displayed equal worst-site percentage. If a UI message implies an increase while displaying a +0.00 percentage-point rounded delta, check underlying precision and wording during Gate 7 final QA.
+- **Unchanged analytical limits:** Planning "need" estimates are based on observed distributions and may understate unmet community demand. Eligible confirmed future inbound can support a planning cycle but is not physically pickable today. Case-measured capacity is not enforced without trusted unit conversion; prices may be unknown; purchases and donation what-ifs remain hypothetical. A successful HiGHS solve or funder PDF is not a real-world outcome or purchasing/distribution approval.
+- **Deployment and signoff:** The CP7.1 release is committed on GitHub; final cloud walkthrough, practitioner feedback, organizational stewardship and Gate 7 acceptance remain distinct evidence items. Consult `docs/user_guide.md` and `docs/onboarding_checklist.md` for user-facing interpretation and safe free nonprofit orientation.
