@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** November 1, 2026
-**Current gate:** Week 6 — 6E technical acceptance evidenced (3-site PDF, 460 tests, deployed workflow, user-reported mobile and under-10-second load); outreach and LinkedIn post pending
+**Last updated:** November 6, 2026
+**Current gate:** Week 7 — CP7.0 readiness reviewed; implementation and Gate 7 acceptance pending. Practitioner outreach verified sent November 2; feedback pending.
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1618,3 +1618,71 @@ No separate handoff document is required.
 3. **Formal closeout:** share link, one-page synthetic PDF sample, caveats, and test evidence with Benjamin and distinguish documented user-reported load/mobile checks from instrumented performance proof. Record any requested corrections; no new stretch features are authorized.
 
 Week 7 (Nov 2–8) covers feedback triage, user guide, onboarding checklist, demo video, and handoff; final project stop remains Nov 13, 2026.
+
+
+---
+
+## 29. Week 7 — CP7.0 Readiness and Execution Handoff (November 6, 2026)
+
+**Status:** Readiness assessment approved with minor refinements. Week 7 implementation authorized; Gate 7 remains open.
+
+### Source verification and historical continuity
+
+- GitHub `main` was independently inspected at commit `706aff4e3eb7d9dc4ad61158c294f4acfdb514b3`.
+- Existing project history in Sections 1–28 is preserved. Historical pending items describe the status at their original checkpoint dates.
+- Week 6's 460 passed, 17 warnings, and zero failures are user-reported Windows test evidence from November 1, not newly executed Week 7 tests.
+- Prior synthetic cloud walkthroughs and reported load/mobile checks remain historical evidence, not independent production certification.
+
+### Practitioner outreach
+
+On November 2, 2026, follow-up emails containing the live application URL, synthetic Demo Mode disclosure, and three feedback questions were independently verified as sent to:
+
+- Share Our Spare
+- Cradles to Crayons Chicago
+- The Period Collective
+
+No practitioner replies were identified in the school mailbox during the November 5 review. Feedback, practitioner quotations and field validation remain unconfirmed. Document outreach attempts without inventing responses.
+
+### Priority CP7.1 — Report provenance
+
+The current Report page allows manual selection of the PDF data-source label. This can misrepresent synthetic, user-uploaded, mixed or uncertain inputs.
+
+Trace the complete Upload → Clean → Forecast → Allocation → Report session lifecycle before changing behavior. Implement the smallest robust source-provenance solution, fail conservatively when provenance cannot be established, and add targeted regression tests.
+
+Do not redesign the reporting architecture. Verify the final implementation with targeted tests, full regression and a Streamlit workflow smoke test.
+
+### Documentation and Gate 7 deliverables
+
+- Create `docs/user_guide.md` with actual application screenshots.
+- Create `docs/onboarding_checklist.md` for free nonprofit staff orientation and a 60-minute walkthrough.
+- Reconcile outdated historical statements in `docs/methods.md`, especially Week 5 purchasing status, against current implementation.
+- Review README installation instructions and verify local setup where possible.
+- Prepare a 4–6 minute demo video, final acceptance checklist, launch communication and handoff materials.
+- Record practitioner responses if received. Otherwise preserve dated outreach attempts.
+- Verify required LinkedIn publications and Benjamin's final acceptance rather than assuming completion.
+
+### Acceptance gaps and limitations
+
+- The recorded synthetic allocation benchmark improved equity-weighted modeled unmet need by 3.18%, while worst-site fill remained 98.27% for both optimized and proportional plans. Do not claim a worst-site fill improvement.
+- The Report supports manually entered bank names and logos, but the Brief's configuration-based branding requirement remains subject to reconciliation or Benjamin's acceptance.
+- Forecasts estimate historical distribution patterns, not independently measured unconstrained community need.
+- Modeled allocations, hypothetical purchases and funding estimates are not verified shipments, supplier quotations or procurement authorization.
+- Synthetic demonstrations do not establish practitioner adoption or real-world impact.
+
+### Nonprofit volunteer and hosting boundaries
+
+All Week 7 contributions remain focused on the free public nonprofit application, documentation, validation, feedback and responsible handoff.
+
+No sales, paid onboarding, commercial customization, licensing implementation or personal hosting expenditure is authorized. This scope description is not a legal determination of OPT compliance.
+
+Benjamin has delegated hosting-platform selection and previously offered to cover hosting costs. Preserve the working Streamlit Community Cloud deployment while evaluating the simplest sustainable arrangement. Organizational account ownership, billing and any domain migration require explicit authorization and successful acceptance testing.
+
+### Execution checkpoints
+
+- CP7.0: Reconcile project state and establish the remaining work.
+- CP7.1: Resolve report provenance and verify regressions.
+- CP7.2: Complete user documentation, nonprofit onboarding guide and methods reconciliation.
+- CP7.3: Complete demonstration, acceptance evidence, launch materials and handoff.
+- Week 8 (November 9–13): Fixes, documentation and final release only.
+
+**Next technical checkpoint:** CP7.1. No Gate 7 PASS, practitioner pilot, new test execution or hosting migration is claimed by this CP7.0 planning record.
