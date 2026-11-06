@@ -15,6 +15,8 @@ from src.workflow import (
     build_derived_outputs,
     prepare_input,
 )
+from src.provenance import ORIGIN_DEMO, ORIGIN_UPLOADED
+from src.survey_session import INVALIDATE_AFTER_SURVEY_CHANGE
 
 st.set_page_config(
     page_title="Upload | Supply Bank Allocator",
@@ -468,6 +470,17 @@ if raw_inputs:
         st.session_state[
             "derived_error"
         ] = derived_error
+
+        # Provenance applies only to the inputs that passed validation.
+        st.session_state["input_provenance"] = {
+            name: (ORIGIN_DEMO if demo_mode else ORIGIN_UPLOADED)
+            for name in cleaned_results
+        }
+        # Even identical content reloaded via a different source must not
+        # reuse a prior forecast, allocation, or downloadable report.
+        for key in INVALIDATE_AFTER_SURVEY_CHANGE:
+            st.session_state.pop(key, None)
+
     cleaned_results = st.session_state.get(
         "cleaned_results",
         {},

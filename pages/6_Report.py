@@ -6,7 +6,10 @@ import streamlit as st
 from src.allocation_ui import input_signature
 from src.forecast_ui import data_signature
 from src.report import ReportError, build_report_data
-from src.report_pdf import render_funder_pdf
+from src.provenance import (
+    ORIGIN_DEMO, ORIGIN_MIXED, ORIGIN_UPLOADED, resolve_report_context,
+)
+from src.report_pdf import DATA_CONTEXT_LABELS, render_funder_pdf
 
 st.set_page_config(page_title="Funder Report | Supply Bank Allocator", page_icon="📄", layout="wide")
 st.title("Funder Report")
@@ -60,6 +63,13 @@ except (ReportError, ValueError, TypeError, KeyError, AttributeError) as exc:
     st.info("Review Upload, then generate a new eight-week Forecast and Allocate plan. No report was generated.")
     st.stop()
 
+data_context = resolve_report_context(cleaned, st.session_state.get("input_provenance"))
+st.caption(
+    "**Automatically tracked data origin:** " + DATA_CONTEXT_LABELS[data_context] + ". "
+    "This describes how files entered this session, not independent validation "
+    "of uploaded data or real-world outcomes."
+)
+
 period = preliminary["periods"]
 st.info(
     f"Observed distribution: **{period['historical_start']:%b %d, %Y} - {period['historical_end']:%b %d, %Y}**. "
@@ -95,16 +105,6 @@ else:
     )
 
 with st.form("g6_report_form"):
-    data_context = st.radio(
-        "Report data source (shown clearly inside the PDF)",
-        options=["synthetic_demo", "user_supplied_unverified"],
-        format_func=lambda value: (
-            "Synthetic demonstration (Demo Mode / test data)"
-            if value == "synthetic_demo" else
-            "User-supplied operational files (not independently verified)"
-        ),
-        help="Choose user-supplied ONLY for your own files. This does not certify their accuracy.",
-    )
     bank_name = st.text_input("Bank name (optional; defaults to Supply Bank)", value="Supply Bank", max_chars=120)
     logo_file = st.file_uploader("Optional logo (PNG/JPEG, up to 2 MB)", type=["png", "jpg", "jpeg"])
     if not base.empty:
@@ -163,16 +163,24 @@ if create:
         st.stop()
 
 output = st.session_state.get("g6_report_pdf")
-if output and (output.get("signature") != current_signature or output.get("plan_object_id") != id(saved_plan)):
+if output and (
+    output.get("signature") != current_signature
+    or output.get("plan_object_id") != id(saved_plan)
+    or output.get("data_context") != data_context
+):
     st.session_state.pop("g6_report_pdf", None)
     output = None
 if output:
     st.caption("The files below reflect the LAST successful Generate action. Unsubmitted edits do not change them.")
     st.success("Your one-page, eight-week report is ready.")
-    if output.get("data_context") == "synthetic_demo":
+    if output.get("data_context") == ORIGIN_DEMO:
         st.info("The downloaded PDF is prominently marked as synthetic demonstration data.")
+    elif output.get("data_context") == ORIGIN_UPLOADED:
+        st.info("The PDF identifies user-uploaded data, which has not been independently verified.")
+    elif output.get("data_context") == ORIGIN_MIXED:
+        st.warning("The PDF identifies mixed synthetic demo and user-supplied data. It is not a real-bank result.")
     else:
-        st.info("The downloaded PDF identifies its source as unverified user-supplied data.")
+        st.warning("The PDF states that its data origin could not be verified. Review the session inputs.")
     p = output["pricing"]
     if p["fully_costed_ask_usd"] is None:
         st.warning("Some product-size prices are missing: total funding dollars are intentionally unavailable.")

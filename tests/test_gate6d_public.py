@@ -36,7 +36,8 @@ def test_home_downloads_existing_four_blank_csv_templates():
 
 def test_report_page_discloses_origin_and_passes_it_to_pdf():
     source = (ROOT / "pages" / "6_Report.py").read_text(encoding="utf-8")
-    assert "Report data source" in source
+    assert 'resolve_report_context(cleaned, st.session_state.get("input_provenance"))' in source
+    assert "Report data source (shown clearly inside the PDF)" not in source
     assert "data_context=data_context" in source
     assert '"data_context": data_context' in source
     assert "synthetic" in source.lower()

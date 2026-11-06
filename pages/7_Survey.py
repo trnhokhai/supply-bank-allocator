@@ -3,6 +3,7 @@
 import pandas as pd
 import streamlit as st
 
+from src.provenance import survey_source_after_change
 from src.survey_session import (
     INVALIDATE_AFTER_SURVEY_CHANGE, SURVEY_COLUMNS, SurveyIntakeError,
     canonical_survey_csv, prepare_survey_change, read_google_form_csv,
@@ -27,8 +28,16 @@ if "distribution_log" not in cleaned or st.session_state.get("derived_outputs") 
 def apply_change(frame: pd.DataFrame, mapping: dict, mode: str) -> None:
     """One transaction: compute first, then publish a fully reconciled state."""
     staged = prepare_survey_change(st.session_state["cleaned_results"], frame, mapping, mode=mode)
+    prior = st.session_state.get("input_provenance")
+    updated_provenance = dict(prior) if isinstance(prior, dict) else {}
+    retained_rows = staged["survey_rows"] - staged["incoming_rows"]
+    updated_provenance["partner_survey"] = survey_source_after_change(
+        updated_provenance.get("partner_survey"), mode=mode,
+        retained_rows=retained_rows,
+    )
     st.session_state["cleaned_results"] = staged["cleaned_results"]
     st.session_state["derived_outputs"] = staged["derived_outputs"]
+    st.session_state["input_provenance"] = updated_provenance
     errors = dict(st.session_state.get("processing_errors", {}))
     errors.pop("partner_survey", None)
     st.session_state["processing_errors"] = errors
