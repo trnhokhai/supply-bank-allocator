@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
 **Last updated:** November 6, 2026
-**Current gate:** Week 7 — CP7.0 readiness reviewed; implementation and Gate 7 acceptance pending. Practitioner outreach verified sent November 2; feedback pending.
+**Current gate:** Week 7 — CP7.4B nonprofit branding committed; 508 user-run local tests passed. Cloud recheck after CP7.4B, 4–6-minute video, final handoff and Benjamin acceptance remain pending. See Section 30 and `docs/WEEK8_HANDOFF.md`.
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1686,3 +1686,37 @@ Benjamin has delegated hosting-platform selection and previously offered to cove
 - Week 8 (November 9–13): Fixes, documentation and final release only.
 
 **Next technical checkpoint:** CP7.1. No Gate 7 PASS, practitioner pilot, new test execution or hosting migration is claimed by this CP7.0 planning record.
+
+---
+
+## 30. Week 7 — CP7.1 through CP7.4B evidence and Week 8 continuity (November 6, 2026)
+
+**Current working checkpoint:** CP7.4B code was committed and pushed to GitHub `main` at `de7223dd0cd87df72b103f29613dac9b9145d691`. This section supersedes earlier *current-state* descriptions, not the historical evidence in Sections 1–29. The documentation-only sync, when separately reviewed/committed, will have its own later SHA. **Gate 7 final acceptance, practitioner field validation, a final public launch, and `v1.0` tagging have not yet been established.**
+
+### Week 7 delivery and Git history (source of truth is GitHub)
+
+- **CP7.0 — Readiness:** Section 29 established the scope, priorities, November 2 practitioner outreach and evidence cautions. Commit `2510a7c`.
+- **CP7.1 — Report source provenance:** automatic synthetic/user-supplied/mixed/unknown labeling; invalidates saved output when relevant inputs change. User-reported Windows suite **474 passed, 17 old PuLP warnings**, plus three local smoke checks. Commit `9079369`.
+- **CP7.2 — Documentation/onboarding:** `docs/user_guide.md`, `docs/onboarding_checklist.md`, ten actual synthetic-app screenshot assets, README/methods reconciliation, and separately shared Word/PDF handoff editions. Source documentation committed `e740b0f`. Check availability/location of shareable Word/PDF files before claiming they are bundled in GitHub.
+- **CP7.3A — Display-precision correction:** keep solver outputs intact; neutral wording when two-decimal worst-partner fill delta displays `0.00 pp` rather than asserting strict increase. `src/allocation_ui.py`, UI, regressions and acceptance matrix updated; user-reported **488 passed, 17 old warnings** and screenshots. Commit `b8bbd5d`.
+- **CP7.3B — Cloud demo and reproducibility:** user-supplied public-app screenshots show an **8-week synthetic** Forecast → Allocate → one-page PDF, with **331,802 modeled allocated units**, **55,486 modeled allocation shortfall**, **239,704 on-hand-backed**, and **92,098 confirmed-inbound-backed** planned units. A separate Windows/Python 3.13 **fresh cloned environment** with uncached pip dependencies, import check and temporary Streamlit local health took **5.39 minutes**. This is one-machine setup/health evidence, **not** an instrumented true server-cold load or full clean-install user-workflow verification. Documentation-only acceptance reconciliation committed `21495a6`.
+- **CP7.4B — Nonprofit PDF branding and technical decision:** GitHub commit **`de7223d`** added read-only `config/report_branding.json`, `src/report_branding.py`, `tests/test_report_branding.py` and updates to `pages/6_Report.py`, README, `docs/DECISIONS.md` (**Decision 048**). Defaults: bank name `Supply Bank`, no logo; optional approved logo path restricted to `config/branding_assets/`. Staff may override name/upload logo for a PDF without modifying config. No sales, customer setup, monetization, commercial customization, pricing logic, cloud billing or optimizer changes. User-reported **35 targeted tests passed** and **508 full pytest tests passed, 0 failed, 17 existing PuLP warnings**. Local app screenshots show config caption and default name, and a **one-page** synthetic PDF with override `Community Test Supply Bank`, correct 366,842 observed units, 25 logged partners, and 55,486 modeled shortfall/SKU gap. This proves local visual smoke, **not** a post-`de7223d` public Cloud smoke.
+
+### Technical decisions and evidence boundaries
+
+1. **Optimizer:** preserve the existing tested HiGHS, baseline-protected allocation objective. The synthetic optimized plan reduces equity-weighted unmet but did **not** demonstrate the Brief's requested *strict increase* in worst-partner fill. Display-only wording was corrected; this is a documented acceptance deviation, not proof of Benjamin's approval and not justification to engineer a favorable synthetic dataset. See `docs/DECISIONS.md` Decision 048.
+2. **Branding:** minimal config-based **nonprofit report branding implemented**, not commercial/tenant branding. Config defaults are neutral; only authorized public logo assets belong in the repository. An 8-week PDF with overridden bank name passed local visual review. Do not claim actual brand/logo authorization or full hosted config/override acceptance from this evidence.
+3. **Data quality:** historical distribution proxies are not unconstrained demand. Planning unmet, SKU supply gaps, projected allocations and assumed supplier costs are not measured actual community shortfalls, physically shipped goods, verified quotations or procurement approval. In the synthetic demonstration, 100% high-need allocation share is descriptive because every classified partner is high-need; it is not a fairness improvement claim.
+4. **Testing:** 508/35 and the visual reports were **user-run/user-supplied**, not a claim of independently executed Windows/Cloud automation. There remain 17 known PuLP reference deprecation warnings, not new test failures. Preserve screenshots, JSON and test logs if preparing a formal evidence packet.
+5. **Scope:** free, open-source ChiEAC nonprofit supply planning, training documents, outreach and handoff only. No commercial implementation, revenue workflows, sales, subscriptions, paid onboarding, partner-specific paid deployment, use of confidential client data or personally paid hosting. This scope statement is not an immigration/OPT legal clearance.
+
+### Immediate next steps — Week 7 closeout / Week 8 (Nov 9–13)
+
+1. **Verify post-`de7223d` public Streamlit deployment** with fresh synthetic-only Demo Mode → Clean & Validate → 8-week Forecast → 8-week Allocate → Report → branded-name PDF download. Check provenance and that the PDF is one page. The earlier CP7.3B cloud check predates the CP7.4B patch; do not conflate the two. Retain screenshot/actual output; hosted success remains **PENDING** until observed.
+2. **CP7.4A:** record and verify a **4–6 minute English synthetic demo** presenting data cleaning, eight-week forecasting, allocation/baseline with candid unchanged worst-fill, Alerts, donation what-if, one-page PDF and limitations. A storyboard was drafted in conversation, but **no recorded video URL has been verified**. Avoid showing confidential partner data or misrepresenting modeled gains as field impact.
+3. **CP7.4C:** prepare and obtain review for launch LinkedIn post (with actual live app and video links; tags only when appropriate), handoff executive summary, technical evidence packet, Word/PDF user/onboarding guides, maintenance/hosting steps, open limitations and final email. The actual launch post and final handoff are **NOT verified as sent/published**. Historical kickoff/progress-post count requires independent verification, not inference.
+4. **Benjamin signoff and stewardship:** seek explicit acceptance or waiver of unchanged worst-site-fill benchmark, identify ChiEAC repo/deployment owner/maintainer and access-transfer plan, and document final deployment/hosting preference. Keep free Streamlit Community Cloud until an explicitly authorized transition. Do not create `v1.0` solely on the basis of code/test pass.
+5. **Practitioner review:** three outreach emails with app URL and questions were verified sent **November 2** to Share Our Spare, Cradles to Crayons Chicago and The Period Collective. No reply was verified in the mailbox during the November 5 review. Record any later genuine reply/permission, or dated attempts, without inventing feedback.
+6. **Release control:** update `docs/acceptance_matrix.md` with new evidence, mark partials clearly, and only tag `v1.0` after required artifacts/acceptance are verified or explicit deviations accepted. Final fellowship deadline **November 13, 2026**.
+
+**Files to consult first in a new chat:** `docs/WEEK8_HANDOFF.md` (short operational handoff), this Section 30, `docs/acceptance_matrix.md`, `docs/DECISIONS.md` Decision 048, and actual GitHub `main` for implementation. Do not restart completed Week 1–7 implementation or alter current optimizer without evidence of a defect. Respect the four pre-existing, untracked Gate 4 scratch files in Khai's local Windows repo; never stage/delete them incidentally.
