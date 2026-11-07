@@ -45,6 +45,30 @@ Blank CSV input templates are available for download on the home page.
 
 This application handles uploads in the active Streamlit server session. Its code does **not intentionally save uploaded partner data to a permanent database**. If deployed publicly, uploaded files are sent to the server operated by the hosting service; do not assume public cloud hosting is suitable for confidential partner information. **Do not upload individual client records, client names, home addresses, medical details, immigration status or other sensitive records.** Export any needed survey data before the session ends. No real-world data validation, vendor pricing verification or supply-bank operating approval is implied by the synthetic demonstration.
 
+## Optional report branding configuration
+
+A nonprofit maintainer may set the default PDF bank name and optional logo in
+[`config/report_branding.json`](config/report_branding.json), for example:
+
+```json
+{
+  "bank_name": "Example Community Supply Bank",
+  "logo_path": "config/branding_assets/example-logo.png"
+}
+```
+
+Place approved PNG/JPEG logos (maximum 2 MB; 1600 pixels per side) inside
+`config/branding_assets/`. Only add organization-authorized, publicly shareable
+logo assets to this **public GitHub repository**. Leave `logo_path: null` for no
+logo. Defaults are deliberately neutral: **Supply Bank**, no logo. Invalid
+configuration or outside-folder paths are rejected rather than silently used.
+
+On the Report page, staff may override these defaults for a single PDF with the
+existing bank-name field and logo uploader. Such changes are session-only and
+do not write to the config, server filesystem, or repository. A report generated
+before a branding config change is invalidated on the next Streamlit rerun. The
+logo and title do not verify or change any underlying planning data.
+
 ## Deploy to Streamlit Community Cloud
 
 Official guide: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy

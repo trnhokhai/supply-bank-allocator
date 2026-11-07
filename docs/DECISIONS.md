@@ -1464,3 +1464,26 @@ Streamlit form and Google Forms CSV inputs normalize to the same canonical `part
 ### Rationale and consequence
 
 A single validated data contract prevents silent schema drift and stale model results. Export is required to carry session-only edits to a future session. An undated synthetic survey can be used in retrospective demo only with an explicit warning; it is not historical backtest evidence.
+
+
+## Decision 048 — Preserve fair allocation results and add minimal report branding config (November 6, 2026)
+
+**Implementation decision:** Keep the tested, baseline-protected HiGHS allocation
+objective and observed worst-partner results. Weighted planning unmet improved
+in synthetic tests, but the worst-partner fill rate was preserved, not proven to
+strictly rise; this remains a **documented deviation from the literal Brief**.
+Do not manipulate the synthetic inputs or claim Benjamin approved a change to
+the acceptance benchmark. Final criterion acceptance remains with Benjamin.
+
+For Report branding, introduce a read-only `config/report_branding.json` with
+`bank_name` and optional repository-relative `logo_path` constrained to
+`config/branding_assets/`. The existing Report form keeps the ability to
+override either value for the current PDF only. Invalid configuration fails
+explicitly; a config default change invalidates a previously generated report
+on rerun. The public demo continues to use generic "Supply Bank" and no logo;
+no actual ChiEAC or partner brand is presumed to have authorized use.
+
+**Consequences:** No allocation, demand, pricing, provenance, database,
+commercial hosting or purchasing behavior is changed. Tests and manual PDF
+smoke evidence are required before claiming implementation complete. This
+technical design decision does **not** constitute formal Gate 7 signoff.

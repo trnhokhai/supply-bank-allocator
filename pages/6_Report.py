@@ -10,6 +10,9 @@ from src.provenance import (
     ORIGIN_DEMO, ORIGIN_MIXED, ORIGIN_UPLOADED, resolve_report_context,
 )
 from src.report_pdf import DATA_CONTEXT_LABELS, render_funder_pdf
+from src.report_branding import (
+    BrandingConfigError, load_report_branding, select_report_branding,
+)
 
 st.set_page_config(page_title="Funder Report | Supply Bank Allocator", page_icon="📄", layout="wide")
 st.title("Funder Report")
@@ -104,8 +107,16 @@ else:
         "The complete table is downloadable even when the one-page PDF groups smaller gaps."
     )
 
+try:
+    configured_brand = load_report_branding()
+except BrandingConfigError as exc:
+    st.error(f"Report branding configuration needs review: {exc}")
+    st.stop()
+
 with st.form("g6_report_form"):
-    bank_name = st.text_input("Bank name (optional; defaults to Supply Bank)", value="Supply Bank", max_chars=120)
+    st.caption("Bank name/logo defaults come from config/report_branding.json. "
+               "You may override them for this PDF without changing the config.")
+    bank_name = st.text_input("Bank name (optional)", value=configured_brand.bank_name, max_chars=120)
     logo_file = st.file_uploader("Optional logo (PNG/JPEG, up to 2 MB)", type=["png", "jpg", "jpeg"])
     if not base.empty:
         editable = base[["product", "size", "supply_gap_units"]].copy()
@@ -142,9 +153,10 @@ if create:
             raw_distribution, derived.site_master, saved_plan,
             expected_signature=current_signature, prices=prices,
         )
-        logo_bytes = logo_file.getvalue() if logo_file is not None else None
+        entered_logo = logo_file.getvalue() if logo_file is not None else None
+        effective_name, logo_bytes = select_report_branding(configured_brand, bank_name, entered_logo)
         payload = render_funder_pdf(
-            report, bank_name=bank_name.strip() or "Supply Bank", logo=logo_bytes,
+            report, bank_name=effective_name, logo=logo_bytes,
             data_context=data_context,
         )
         detail = report["ask_by_sku"].to_csv(index=False, na_rep="Not priced").encode("utf-8-sig")
@@ -156,6 +168,7 @@ if create:
             "warnings": report["warnings"],
             "pricing": report["pricing"],
             "data_context": data_context,
+            "branding_signature": configured_brand.signature,
         }
     except (ReportError, ValueError, TypeError, KeyError, RuntimeError, OSError) as exc:
         st.session_state.pop("g6_report_pdf", None)
@@ -167,6 +180,7 @@ if output and (
     output.get("signature") != current_signature
     or output.get("plan_object_id") != id(saved_plan)
     or output.get("data_context") != data_context
+    or output.get("branding_signature") != configured_brand.signature
 ):
     st.session_state.pop("g6_report_pdf", None)
     output = None
