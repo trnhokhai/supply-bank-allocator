@@ -115,6 +115,26 @@ def comparison_summary(result: dict) -> dict:
     }
 
 
+def worst_fill_display(delta_pp: float) -> tuple[float, str]:
+    """Classify the fill-rate change at the same 0.01 pp shown in the UI.
+
+    The underlying solver/comparison precision is preserved elsewhere; this
+    helper only prevents reporting a visible +0.00 or -0.00 as a real gain/loss.
+    """
+    try:
+        raw = float(delta_pp)
+    except (TypeError, ValueError) as exc:
+        raise AllocationError("Worst-site fill change must be numeric.") from exc
+    if not np.isfinite(raw):
+        raise AllocationError("Worst-site fill change must be finite.")
+    shown = float(f"{raw:.2f}")  # mirror Streamlit's two-decimal pp display
+    if shown > 0:
+        return shown, "increased"
+    if shown < 0:
+        return shown, "decreased"
+    return 0.0, "unchanged"
+
+
 def csv_download(data: pd.DataFrame) -> bytes:
     """Excel-safe UTF-8 CSV without writing private uploaded data to disk."""
     if not isinstance(data, pd.DataFrame):

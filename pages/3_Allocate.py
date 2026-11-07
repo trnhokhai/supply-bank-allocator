@@ -17,6 +17,7 @@ from src.allocation_ui import (
     input_signature,
     partner_summary,
     verified_capacity_overrides,
+    worst_fill_display,
 )
 from src.forecast_ui import ForecastUIError, data_signature, validate_forecast_table
 
@@ -210,18 +211,24 @@ b1, b2, b3, b4 = st.columns(4)
 b1.metric("Optimized weighted unmet", f"{comparison['optimized_weighted_unmet']:,.1f}",
           delta=f"{comparison['weighted_units_improved']:+,.1f} weighted units improved")
 b2.metric("Baseline weighted unmet", f"{comparison['baseline_weighted_unmet']:,.1f}")
+# Match the interpretation to the two-decimal percentage-point delta shown.
+# Never call an imperceptible +0.00 pp change an improvement.
+displayed_fill_delta_pp, fill_direction = worst_fill_display(comparison["worst_fill_delta_pp"])
 b3.metric("Optimized worst-site fill", f"{comparison['optimized_worst_fill_pct']:.1f}%",
-          delta=f"{comparison['worst_fill_delta_pp']:+.2f} percentage points")
+          delta=(f"{displayed_fill_delta_pp:+.2f} percentage points"
+                 if fill_direction != "unchanged" else "0.00 percentage points"),
+          delta_color="off" if fill_direction == "unchanged" else "normal")
 b4.metric("Baseline worst-site fill", f"{comparison['baseline_worst_fill_pct']:.1f}%")
 if comparison["weighted_units_improved"] <= 0:
     st.info("This run did not improve weighted planning unmet units versus the constrained proportional baseline.")
-if comparison["worst_fill_delta_pp"] < -1e-5:
+if fill_direction == "decreased":
     st.warning("Trade-off: worst-partner fill rate DECREASED versus the baseline. "
                "The maximum-shortfall penalty is a soft objective, not a guaranteed floor.")
-elif comparison["worst_fill_delta_pp"] > 1e-5:
+elif fill_direction == "increased":
     st.success("The worst-partner fill rate increased versus the proportional baseline in this run.")
 else:
-    st.caption("Worst-partner fill rate is unchanged versus the proportional baseline.")
+    st.caption("No worst-partner fill-rate change is visible at the displayed 0.01 percentage-point precision. "
+               "This does not establish a strict improvement.")
 
 gain_pct = comparison["weighted_improvement_pct"]
 if gain_pct is not None:

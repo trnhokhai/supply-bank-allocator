@@ -10,6 +10,7 @@ from src.allocation_ui import (
     input_signature,
     partner_summary,
     verified_capacity_overrides,
+    worst_fill_display,
 )
 
 
@@ -92,3 +93,39 @@ def test_csv_formula_injection_guard():
     csv = csv_download(pd.DataFrame([{"site_name": "=SUM(1,1)", "label": "  @risk", "units": 2}]))
     assert b"'=SUM(1,1)" in csv
     assert b"'  @risk" in csv
+
+
+@pytest.mark.parametrize(
+    ("raw_delta_pp", "display_delta_pp", "direction"),
+    [
+        (0.0, 0.0, "unchanged"),
+        (0.00001, 0.0, "unchanged"),
+        (-0.00001, 0.0, "unchanged"),
+        (0.0049, 0.0, "unchanged"),
+        (-0.0049, 0.0, "unchanged"),
+        (0.006, 0.01, "increased"),
+        (-0.006, -0.01, "decreased"),
+        (0.1, 0.1, "increased"),
+        (-0.1, -0.1, "decreased"),
+    ],
+)
+def test_worst_fill_display_uses_same_precision_as_label(raw_delta_pp, display_delta_pp, direction):
+    shown, status = worst_fill_display(raw_delta_pp)
+    assert shown == pytest.approx(display_delta_pp)
+    assert status == direction
+
+
+@pytest.mark.parametrize("raw", [float("nan"), float("inf"), None, "not a number"])
+def test_worst_fill_display_rejects_unknown_change(raw):
+    with pytest.raises(AllocationError, match="Worst-site fill change"):
+        worst_fill_display(raw)
+
+
+def test_allocate_page_uses_display_precision_for_message():
+    from pathlib import Path
+    page = (Path(__file__).resolve().parents[1] / "pages" / "3_Allocate.py").read_text(encoding="utf-8")
+    assert 'worst_fill_display(comparison["worst_fill_delta_pp"])' in page
+    assert 'if fill_direction == "decreased":' in page
+    assert 'elif fill_direction == "increased":' in page
+    assert 'delta_color="off" if fill_direction == "unchanged" else "normal"' in page
+    assert 'comparison["worst_fill_delta_pp"] > 1e-5' not in page
