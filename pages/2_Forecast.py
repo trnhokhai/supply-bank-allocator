@@ -19,6 +19,7 @@ from src.forecast_ui import (
     summary,
 )
 from src.prediction_bands import add_empirical_plausible_ranges
+from src.forecast_history_view import build_historical_window
 
 st.set_page_config(page_title="Forecast | Supply Bank Allocator", page_icon="📈", layout="wide")
 st.title("Forecast Demand")
@@ -172,6 +173,8 @@ chart = px.line(rollup, x="week_start", y="forecast_units", color="variant", mar
 chart.update_layout(legend_title_text="Product / Size", hovermode="x unified")
 st.plotly_chart(chart, width="stretch")
 st.caption("Roll-up sums point forecasts only. It is not a calibrated network prediction band.")
+st.caption("These lines show FUTURE forecasts only, not historical values. Level-based methods may produce flat "
+           "4–8-week forecasts; see an individual series below for the preceding 26 historical weeks.")
 
 st.markdown("#### Individual series")
 series_options = sorted(set(zip(visible["site_id"], visible["product"], visible["size"])))
@@ -197,7 +200,28 @@ if detail["requires_review"].fillna(False).any():
     flags = sorted(set(v for v in detail["quality_flags"].dropna().astype(str) if v))
     st.warning("This series needs review. Flags: " + "; ".join(flags) + ". A zero forecast is not proof of zero need.")
 
+history_view = build_historical_window(
+    weekly, site_id=chosen[0], product=chosen[1], size=chosen[2],
+    origin_week=result["origin"], lookback_weeks=26,
+)
 fig = go.Figure()
+if history_view["has_record"].any():
+    fig.add_trace(go.Scatter(
+        x=history_view["week_start"], y=history_view["actual_units"],
+        mode="lines+markers", name="Historical weekly distributions",
+        line={"color": "#64748b", "width": 2}, marker={"size": 6},
+        connectgaps=False,
+    ))
+    inferred = history_view.loc[history_view["is_imputed_zero"]]
+    if not inferred.empty:
+        fig.add_trace(go.Scatter(
+            x=inferred["week_start"], y=inferred["actual_units"],
+            mode="markers", name="Inferred zero (not directly observed)",
+            marker={"symbol": "circle-open", "size": 11, "color": "#d97706", "line": {"width": 2}},
+        ))
+else:
+    st.caption("No historical product-size observations in this 26-week window. "
+               "A survey-based forecast may still be provisional.")
 if detail["lower_units"].notna().all() and detail["upper_units"].notna().all():
     fig.add_trace(go.Scatter(x=detail["week_start"], y=detail["upper_units"], mode="lines",
                              line={"width": 0}, showlegend=False, hoverinfo="skip"))
@@ -205,12 +229,35 @@ if detail["lower_units"].notna().all() and detail["upper_units"].notna().all():
                              line={"width": 0}, fill="tonexty", name="Provisional 80% plausible range",
                              fillcolor="rgba(31,119,180,0.16)"))
 fig.add_trace(go.Scatter(x=detail["week_start"], y=detail["forecast_units"],
-                         mode="lines+markers", name="Point forecast"))
-fig.update_layout(xaxis_title="Week", yaxis_title="Individual units", hovermode="x unified")
+                         mode="lines+markers", name="Future point forecast",
+                         line={"color": "#2563eb", "width": 2.5}))
+boundary = pd.Timestamp(result["origin"]) + pd.Timedelta(days=3, hours=12)
+fig.add_shape(
+    type="line", x0=boundary, x1=boundary, y0=0, y1=1, yref="paper",
+    line={"color": "#94a3b8", "width": 1.5, "dash": "dot"},
+)
+fig.update_layout(xaxis_title="ISO week", yaxis_title="Individual units", hovermode="x unified")
 st.plotly_chart(fig, width="stretch")
+st.caption("Gray = historical recorded distribution series (including separately marked inferred zeros); "
+           "blue = future model forecast. Dotted line separates history and future. "
+           "Gaps are missing history, NOT zeros. These are distribution proxies, not verified community demand.")
 
 with st.expander("How was this forecast calculated?"):
     st.write("Method:", first["method"])
+    method_notes = {
+        "naive": "Repeats the latest recorded partner-total weekly quantity across the horizon.",
+        "ma4": "Repeats the mean of the latest four eligible partner-total weeks.",
+        "ma8": "Repeats the mean of the latest eight eligible partner-total weeks.",
+        "ses": "Simple exponential smoothing estimates a level, so forecasts are typically flat.",
+        "damped_holt": "Damped Holt can project a gradually fading trend instead of a flat level.",
+        "croston": "Croston estimates the average size and interval of intermittent distributions.",
+        "tsb": "TSB combines intermittent distribution size with occurrence probability.",
+        "survey_based": "Provisional peer-calibrated distribution estimate for a partner with limited history.",
+    }
+    st.caption(method_notes.get(str(first["method"]), "Review method and source metadata below."))
+    st.caption("For historical sites, the model predicts partner-total units; recent historical "
+               "product-size shares are used to split that total into individual SKUs. "
+               "A flat forecast is not evidence of zero uncertainty.")
     st.write("Forecast source:", first["forecast_source"])
     st.write("Hierarchy:", first.get("hierarchy", "N/A"))
     st.write("Mix source:", first.get("mix_source", "N/A"))

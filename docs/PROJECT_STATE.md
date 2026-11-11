@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** November 6, 2026
-**Current gate:** Week 7 — CP7.4B nonprofit branding committed; 508 user-run local tests passed. Cloud recheck after CP7.4B, 4–6-minute video, final handoff and Benjamin acceptance remain pending. See Section 30 and `docs/WEEK8_HANDOFF.md`.
+**Last updated:** November 10, 2026
+**Current gate:** CP8.1 local Forecast explainability closeout verified; Week 8 final acceptance, Cloud smoke, video, stewardship and handoff remain pending. See Sections 30–31 and `docs/WEEK8_HANDOFF.md`.
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1720,3 +1720,11 @@ Benjamin has delegated hosting-platform selection and previously offered to cove
 6. **Release control:** update `docs/acceptance_matrix.md` with new evidence, mark partials clearly, and only tag `v1.0` after required artifacts/acceptance are verified or explicit deviations accepted. Final fellowship deadline **November 13, 2026**.
 
 **Files to consult first in a new chat:** `docs/WEEK8_HANDOFF.md` (short operational handoff), this Section 30, `docs/acceptance_matrix.md`, `docs/DECISIONS.md` Decision 048, and actual GitHub `main` for implementation. Do not restart completed Week 1–7 implementation or alter current optimizer without evidence of a defect. Respect the four pre-existing, untracked Gate 4 scratch files in Khai's local Windows repo; never stage/delete them incidentally.
+
+## 31. CP8.1 — Forecast explanation UI closeout (November 10, 2026)
+
+**Scope and evidence:** Added a display-only 26-calendar-week historical trace alongside the existing 4–8-week Individual Series forecast, with a visible origin boundary, imputed-zero markers and missing-week gaps. The network roll-up remains a future point-forecast sum; forecasting algorithms, site-level method selection, WAPE, optimizer, survey, reporting and data contracts were not changed. User-supplied local Streamlit screenshot showed the combined historical/forecast view. After fixing a newly introduced generic NumPy timedelta deprecation, **530 user-run local tests passed, 17 warnings (legacy PuLP reference).** Earlier 12 CP8.1 helper warnings were cleaned. CP8.1 is locally verified; hosted post-commit smoke remains distinct and unverified.
+
+**Interpretation:** Flat forecasting paths are possible with Naive, MA and SES; this is a presentation/explainability fix, not a new ML model or an improved-accuracy claim. Four-fold four-week synthetic recorded-panel WAPE (~16.86% in user-provided run) is not eight-week field accuracy. Provisional 80% ranges are not validated predictive coverage. User review identified an important usability gap: advanced Allocate and Alerts controls are hard for nonprofit staff to understand. Prioritize user-centered explanatory UX in Week 8 **without silently changing optimizers or business policies**.
+
+**Still pending:** Benjamin's explicit approval/waiver on strict worst-partner fill improvement, post-branding/post-CP8.1 public Cloud validation, final 4–6-minute video, actual launch/handoff evidence and organization stewardship. These remain open; do not tag `v1.0` from this checkpoint alone. Four existing local Gate 4 scratch files are excluded from the commit.

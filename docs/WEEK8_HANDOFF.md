@@ -46,3 +46,7 @@
 - For user local Windows edits, deliver minimal reproducible reviewed patch/ZIP, with `--check` before `--apply`, tests, manual screenshots and selective staging. Do not change GitHub without explicit user agreement; user prefers to review/commit/push themself.
 
 **Working relationship:** Keep explanations compact and practical in informal Vietnamese. Lead technical decisions, avoid repeatedly asking the user to restate prior progress, do not promise background work, and use actual repo/evidence before suggesting work.
+
+## November 10 technical addendum — CP8.1 local closeout
+
+The previous quick-handoff snapshot is historical. At local pre-commit `main` HEAD `feb4430`, CP8.1 added a display-only 26-week historical comparison to Forecast's Individual Series. Local screenshot review and post-warning-fix tests: **530 user-run local tests passed, 17 warnings (legacy PuLP reference).** No changes to forecasting models, WAPE, allocation, survey, report or paid/commercial features. See `docs/PROJECT_STATE.md` Section 31 and `docs/DECISIONS.md` Decision 049 for details. Confirm actual GitHub main after the CP8.1 commit/push rather than trusting this snapshot. Week 8 still must prioritize nonprofit-staff usability in Allocate/Alerts and the previously documented release/acceptance blockers. No new deliverable, signoff, video, deployment or `v1.0` release is implied.

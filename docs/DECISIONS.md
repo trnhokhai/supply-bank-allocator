@@ -1487,3 +1487,11 @@ no actual ChiEAC or partner brand is presumed to have authorized use.
 commercial hosting or purchasing behavior is changed. Tests and manual PDF
 smoke evidence are required before claiming implementation complete. This
 technical design decision does **not** constitute formal Gate 7 signoff.
+
+## Decision 049 — CP8.1 forecast explainability is display-only (November 10, 2026)
+
+**Status:** Accepted for local UI improvement; no claim of production or field acceptance.
+
+Show a selected site/product/size's preceding 26 calendar weeks next to its existing 4–8-week point forecast. Preserve missing weeks as gaps rather than zero, visibly mark imputed distribution zeros, and label the time boundary. Keep future-only Network Roll-up and its forecast-only explanation. Do not alter historical or survey forecasts, model selection, WAPE, range computation, allocation inputs, HiGHS solver, report or session state. Remove the newly introduced NumPy generic timedelta deprecation in the display helper and retain a focused regression test.
+
+**Reason:** Users could not tell why model-based flat forecasts differed from fluctuating history. Explainability improves honest interpretation without changing scientific calculations. Synthetic historical four-week WAPE and provisional 80% plausible ranges remain explicitly non-field-validated. The subsequent operational UX review of Allocate/Alerts is a separate Week 8 consideration and requires independent scoped acceptance.
