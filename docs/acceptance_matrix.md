@@ -76,3 +76,15 @@ No claim of Gate 7 full PASS or field validation is made here.
 ## CP8.1 — Local forecast explainability evidence (November 10, 2026)
 
 User-supplied local screenshot confirms an Individual Series chart with 26 prior weekly distributions and a distinct 8-week point forecast, with a visible history/future boundary. New helper regression fix and **530 user-run local tests passed, 17 warnings (legacy PuLP reference).** The app's forecast engine, audited WAPE values, historical folds, allocation decisions and report data contracts remain unchanged. This is a **local UI acceptance only**, not an independent claim of no leakage in all data, improved predictive accuracy, a real partner pilot or post-commit Cloud deployment. Gate 7 remains PARTIAL pending existing acceptance/ownership/video/public-Cloud requirements.
+
+## Week 8 local evidence update — November 11, 2026 (not final sign-off)
+
+| Item | User-provided local evidence | Status / next step |
+|---|---|---|
+| CP8.2 decision usability | Staff review queues, partner-level coverage, clear modeled gaps and on-hand/inbound distinctions visible on synthetic screenshots; CP8.2D 59 focused tests passed | **Local PASS**; not a field/user pilot |
+| CP8.3A rounding alignment | Shared integer SKU need implemented in Alerts; fractional-gap regression added; 537 full-suite tests passed (18 warnings: 17 existing PuLP, 1 test-only NumPy) | **Local code PASS**; accompanying test-only warning cleanup needs follow-up verification |
+| Eight-week end-to-end | Forecast 2,728 rows/25 partners; Allocate 331,802 units, 55,486 modeled unmet; Alerts, hypothetical scenario and one-page provenance-marked synthetic PDF visible | **Local smoke PASS** on pre-rounding screenshots; hosted final-commit Cloud smoke **PENDING** |
+| Report financial integrity | 366,842 historical distribution units, 25 recorded partner sites, 55,486 modeled shortfall and SKU gap in shown pre-alignment PDF; price totals N/A when prices missing | **Local visual PASS**; explicitly synthetic and not measured need |
+| Narrative, stewardship, acceptance | No new evidence of recorded video, public launch post, Benjamin signoff of strict worst-site increase, ChiEAC maintainer handover or approved `v1.0` | **PENDING**; must not infer from test success |
+
+**Evidence notes:** The screenshots are user-supplied local runs. Date-range/rounding consistency uses the source contracts, not a verified hosted execution. The 17 existing PuLP warnings are deprecations; one fresh NumPy timedelta warning was created by CP8.3A's test fixture and has a one-line test-only correction. Final post-cleanup test output should be retained with release records. Four unrelated Gate 4 scratch files must not be staged or deleted.

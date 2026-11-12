@@ -10,6 +10,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.alerts import AlertsError, build_inventory_alerts
+from src.alerts_ui import actionable_alert_rows, staff_action_queue
 from src.allocation_inputs import prepare_allocation_inputs
 from src.allocation_ui import csv_download, input_signature
 from src.forecast_ui import ForecastUIError, data_signature, validate_forecast_table
@@ -51,6 +52,11 @@ except (ValueError, TypeError, KeyError, AttributeError, ForecastUIError) as exc
     st.stop()
 
 st.subheader("1 · Coverage assumptions")
+st.caption(
+    "Start with the default short (<3 weeks) and long (>12 weeks) thresholds. "
+    "Choose the same planning cycle as Allocate when comparing results. "
+    "A size can pass a short-stock threshold and still lack enough units for the whole cycle."
+)
 with st.form("g5_alert_controls"):
     left, middle, right = st.columns(3)
     cycle_weeks = left.slider(
@@ -94,17 +100,19 @@ st.caption(
 
 st.subheader("2 · Inventory coverage")
 a, b, c, d, e = st.columns(5)
-a.metric("Network on-hand short", summary["on_hand_short"])
-b.metric("Network on-hand long", summary["on_hand_long"])
-c.metric("Network cycle short", summary["cycle_short"])
-d.metric("Network cycle long", summary["cycle_long"])
-e.metric("Network cannot assess", summary["unassessable"])
+a.metric("Short on hand (sizes)", summary["on_hand_short"])
+b.metric("Long on hand (sizes)", summary["on_hand_long"])
+c.metric("Projected short (sizes)", summary["cycle_short"])
+d.metric("Projected long (sizes)", summary["cycle_long"])
+e.metric("Cannot assess (sizes)", summary["unassessable"])
+st.caption("Each count is a **product-size variant across the network**, not a count of partners or units.")
 
 st.info(
-    "**Important:** On-hand WOS = current counted units ÷ mean weekly forecast. "
-    "Projected-cycle WOS = (on-hand + eligible confirmed inbound) ÷ the same forecast. "
-    "The second is the Project Brief's WOS definition; it does not imply that incoming stock "
-    "is already available for picking. Thresholds apply independently to both measures."
+    "**Current stock vs. projected supply:** On-hand weeks of supply (WOS) uses "
+    "counted stock only. Projected-cycle WOS also includes eligible confirmed "
+    "deliveries—not stock available to pick today. Both compare to mean weekly "
+    "forecast distributions. A positive full-cycle gap is a separate planning "
+    "warning, even when WOS is classified as adequate."
 )
 if forecast_state.get("demo_optin"):
     st.warning("Synthetic retrospective survey assumption was enabled; this is not a field-validated forecast.")
@@ -113,8 +121,35 @@ if not report["warnings"].empty:
         st.dataframe(report["warnings"], width="stretch", hide_index=True)
         st.caption("Unknown-size arrivals, pending donations and unverified past receipts are excluded by the upstream supply contract.")
 
+st.subheader("3 · What needs attention across all products?")
+queue = staff_action_queue(alerts)
+st.caption(
+    "Start here: missing stock data needs verification; short current coverage needs an "
+    "upcoming-distribution check; a positive full-cycle gap needs planning even when WOS is adequate. "
+    "Review order is NOT a verified emergency severity or an instruction to purchase."
+)
+if queue.empty:
+    st.success("No flagged sizes or modeled cycle gaps under these inputs. Recheck forecasts and physical stock before acting.")
+else:
+    st.dataframe(
+        queue[["product", "size", "review_first", "why", "next_action"]].head(12),
+        hide_index=True, width="stretch",
+        column_config={
+            "product": "Product", "size": "Size",
+            "review_first": "Review category",
+            "why": st.column_config.TextColumn("Why it matters", width="large"),
+            "next_action": st.column_config.TextColumn("What staff should do next", width="large"),
+        },
+    )
+    st.caption(f"Showing {min(12, len(queue))} of {len(queue)} flagged product sizes. "
+               "Use the CSV to review all rows; verify counts, delivery timing and forecast quality before acting.")
+    st.download_button("Download complete staff review queue (CSV)",
+                       csv_download(queue), file_name="inventory_staff_review_queue.csv", mime="text/csv")
+
+st.subheader("4 · Inspect one product family")
 product_options = sorted(alerts["product"].unique().tolist())
-product = st.selectbox("Product family", options=product_options)
+product = st.selectbox("Product family", options=product_options,
+                       index=product_options.index("diaper") if "diaper" in product_options else 0)
 selected = alerts.loc[alerts["product"].eq(product)].copy()
 show_cols = [
     "product", "size", "on_hand_units", "confirmed_inbound_units",
@@ -136,7 +171,26 @@ st.caption(
     "Zero or missing forecasts have no interpretable WOS. Forecast-review flags require staff judgment."
 )
 
-st.subheader("3 · Inventory-vs-demand size mix")
+st.subheader("5 · What to check for this product")
+family_queue = staff_action_queue(selected)
+if family_queue.empty:
+    st.success("No flagged sizes or positive modeled cycle gaps for this product under these assumptions.")
+else:
+    st.dataframe(
+        family_queue[["size", "review_first", "why", "next_action"]],
+        hide_index=True, width="stretch",
+        column_config={
+            "size": "Size", "review_first": "Review category",
+            "why": st.column_config.TextColumn("Reason", width="large"),
+            "next_action": st.column_config.TextColumn("Suggested next step", width="large"),
+        },
+    )
+st.caption("Before acting: reconcile physical counts, already committed stock, arrival dates "
+           "and quality flags. No alert is an automatic purchase or shipment instruction.")
+
+st.subheader("6 · Inventory-vs-forecast size mix")
+mix = report["mismatch"]
+subset = mix.loc[mix["product"].eq(product)].copy()
 mix = report["mismatch"]
 subset = mix.loc[mix["product"].eq(product)].copy()
 if subset.empty:
@@ -177,19 +231,7 @@ else:
         "Positive = relatively more stock than projected mix; negative = relatively less."
     )
 
-st.subheader("4 · Review recommended actions")
-risks = selected.loc[
-    selected["on_hand_status"].isin(["short", "long"]) |
-    selected["cycle_status"].isin(["short", "long"]) |
-    selected["on_hand_wos"].isna()
-]
-if risks.empty:
-    st.success("No threshold breaches in this product family for the selected assumptions.")
-else:
-    for row in risks.itertuples(index=False):
-        st.write(f"**{row.product} / {row.size}:** {row.recommendation}")
-
-st.subheader("5 · Download and eight-week planning ask")
+st.subheader("7 · Download and eight-week planning ask")
 st.download_button(
     "Download all inventory alerts (CSV)", csv_download(alerts),
     file_name="inventory_alerts.csv", mime="text/csv",

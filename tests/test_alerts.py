@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from src.alerts import AlertsError, build_inventory_alerts
+from src.alerts_ui import actionable_alert_rows, staff_action_queue
 
 
 def inputs(*, with_missing=False, with_zero=False):
@@ -226,3 +227,60 @@ def test_full_cycle_gap_recommendation_does_not_mutate_or_overstate_on_hand():
     assert look(result, "5")["confirmed_inbound_units"] == 140
     pd.testing.assert_frame_equal(prepared["on_hand"], copy_on_hand)
     pd.testing.assert_frame_equal(prepared["confirmed_inbound"], copy_inbound)
+
+
+
+def test_staff_action_queue_does_not_claim_gap_is_measured():
+    fc, prepared = inputs()
+    result = build_inventory_alerts(fc, prepared)
+    queue = staff_action_queue(result["alerts"]).set_index("size")
+    # Size 6 has short on-hand coverage but no modeled four-week supply gap.
+    assert queue.loc["6", "review_first"] == "Check current stock"
+    assert "no modeled gap for the selected cycle" in queue.loc["6", "why"]
+    assert "no measured cycle gap" not in queue.loc["6", "why"]
+
+
+def test_staff_action_queue_prioritizes_current_stock_and_keeps_adequate_cycle_gap():
+    fc, prepared = inputs()
+    # Size 4: WOS=3.5 adequate, but 50-unit gap in four-week planning cycle.
+    prepared["on_hand"].loc[lambda d: d["size"] == "4", "on_hand_units"] = 350
+    # Size 5: current shortage; still needs checking even with confirmed inbound.
+    out = build_inventory_alerts(fc, prepared)
+    alerts_before = out["alerts"].copy(deep=True)
+    queue = staff_action_queue(out["alerts"])
+    by_size = queue.set_index("size")
+    assert by_size.loc["4", "review_first"] == "Plan cycle gap"
+    assert "50 modeled units" in by_size.loc["4", "why"]
+    assert by_size.loc["5", "review_first"] == "Check current stock"
+    assert queue.index[queue["size"].eq("5")][0] < queue.index[queue["size"].eq("4")][0]
+    assert "3" not in set(queue["size"])
+    assert "Verify" in by_size.loc["5", "next_action"] or "Confirm" in by_size.loc["5", "next_action"]
+    pd.testing.assert_frame_equal(out["alerts"], alerts_before)
+
+
+def test_positive_full_cycle_gap_is_actionable_when_both_wos_statuses_are_adequate():
+    fc, prepared = inputs()
+    # 350 units / 100 units per week = 3.5 WOS (adequate at the 3-week
+    # threshold), yet a four-week plan still has a 50-unit supply gap.
+    prepared["on_hand"].loc[
+        lambda d: d["size"] == "4", "on_hand_units"
+    ] = 350
+    result = build_inventory_alerts(fc, prepared)
+    row = look(result, "4")
+    assert row["on_hand_status"] == "adequate"
+    assert row["cycle_status"] == "adequate"
+    assert row["on_hand_wos"] == pytest.approx(3.5)
+    assert row["cycle_wos"] == pytest.approx(3.5)
+    assert row["cycle_supply_gap_units"] == 50
+    assert "50-unit supply gap" in row["recommendation"]
+    action_rows = actionable_alert_rows(result["alerts"])
+    assert "4" in set(action_rows["size"])
+    assert "3" not in set(action_rows["size"])  # no alert, unknown, or gap
+
+
+def test_actionable_alerts_preserve_threshold_flags_and_unassessable_stock():
+    fc, prepared = inputs(with_missing=True)
+    result = build_inventory_alerts(fc, prepared)
+    action_rows = actionable_alert_rows(result["alerts"])
+    assert {"N", "5", "6"}.issubset(set(action_rows["size"]))
+    assert "3" not in set(action_rows["size"])

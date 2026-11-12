@@ -90,6 +90,45 @@ def partner_summary(allocation: pd.DataFrame) -> pd.DataFrame:
     return result.sort_values(["fill_rate_pct", "site_name"], na_position="last").reset_index(drop=True)
 
 
+def partner_decision_view(partners: pd.DataFrame) -> pd.DataFrame:
+    """Classify the already-calculated partner rollup without changing allocations.
+
+    A modeled fill status is not evidence of actual distribution or verified need.
+    """
+    required = {"site_id", "site_name", "need_units", "allocated_units", "unmet_units",
+                "ready_now_units", "awaiting_inbound_units", "fill_rate_pct"}
+    if not isinstance(partners, pd.DataFrame) or not required.issubset(partners.columns):
+        raise AllocationError("Partner decision view requires a valid partner summary.")
+    view = partners.copy()
+    if view.empty:
+        view["coverage_status"] = pd.Series(dtype="str")
+        view["next_check"] = pd.Series(dtype="str")
+        return view
+    if (view[["need_units", "allocated_units", "unmet_units"]].isna().any().any()
+            or (view[["need_units", "allocated_units", "unmet_units"]] < 0).any().any()
+            or not (view["allocated_units"] + view["unmet_units"]).eq(view["need_units"]).all()):
+        raise AllocationError("Partner coverage does not reconcile to modeled need.")
+
+    def classify(row):
+        if row.need_units == 0:
+            return ("No modeled need", 4, "Review the forecast; zero modeled need is not proof of no need.")
+        if row.allocated_units == 0:
+            return ("No allocation", 0, "Review missing coverage and verify the need and supply by size.")
+        if row.unmet_units > 0:
+            return ("Partially covered", 1, "Review size-level gaps and eligible receipts before confirming a plan.")
+        return ("Fully covered", 3, "Verify physical counts and approvals before picking; inbound is not ready now.")
+
+    labels = view.apply(classify, axis=1)
+    view["coverage_status"] = [x[0] for x in labels]
+    view["_priority"] = [x[1] for x in labels]
+    view["next_check"] = [x[2] for x in labels]
+    view = view.sort_values(
+        ["_priority", "fill_rate_pct", "unmet_units", "site_name"],
+        ascending=[True, True, False, True], na_position="last", kind="stable",
+    )
+    return view.drop(columns="_priority").reset_index(drop=True)
+
+
 def comparison_summary(result: dict) -> dict:
     """Improvement means baseline weighted unmet MINUS optimized weighted unmet."""
     try:

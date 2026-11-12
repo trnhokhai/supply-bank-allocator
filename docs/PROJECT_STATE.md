@@ -1,7 +1,7 @@
 # Project State — Diaper & Period Supply Bank Allocator
 
-**Last updated:** November 10, 2026
-**Current gate:** CP8.1 local Forecast explainability closeout verified; Week 8 final acceptance, Cloud smoke, video, stewardship and handoff remain pending. See Sections 30–31 and `docs/WEEK8_HANDOFF.md`.
+**Last updated:** November 11, 2026
+**Current gate:** Week 8 CP8.3A local regressions and synthetic 8-week walkthrough verified; release/Cloud, video, stewardship and Benjamin acceptance remain pending. See Section 32 and `docs/acceptance_matrix.md`.
 **Repository:** `trnhokhai/supply-bank-allocator`
 **Default branch:** `main`
 
@@ -1728,3 +1728,15 @@ Benjamin has delegated hosting-platform selection and previously offered to cove
 **Interpretation:** Flat forecasting paths are possible with Naive, MA and SES; this is a presentation/explainability fix, not a new ML model or an improved-accuracy claim. Four-fold four-week synthetic recorded-panel WAPE (~16.86% in user-provided run) is not eight-week field accuracy. Provisional 80% ranges are not validated predictive coverage. User review identified an important usability gap: advanced Allocate and Alerts controls are hard for nonprofit staff to understand. Prioritize user-centered explanatory UX in Week 8 **without silently changing optimizers or business policies**.
 
 **Still pending:** Benjamin's explicit approval/waiver on strict worst-partner fill improvement, post-branding/post-CP8.1 public Cloud validation, final 4–6-minute video, actual launch/handoff evidence and organization stewardship. These remain open; do not tag `v1.0` from this checkpoint alone. Four existing local Gate 4 scratch files are excluded from the commit.
+
+## 32. CP8.2A–D and CP8.3A — Week 8 local closeout evidence (November 11, 2026)
+
+**Operator-centered changes:** Allocate now presents partner coverage status, a clearly non-emergency review queue with an explicit full-precision sorting rule, on-hand versus inbound-backed proposals, and per-partner size actions. Alerts presents cross-product staff checks, differentiates WOS thresholds from whole-cycle planning gaps, and uses "modeled" rather than "measured" where appropriate. Source calculations and the constrained HiGHS optimizer remain unchanged by CP8.2. No commercial functionality was added.
+
+**Integer gap alignment (CP8.3A):** Alerts' full-cycle gap uses the same rounded network SKU demand as Allocate/Report (`forecast_cycle_needs`) instead of taking the ceiling of the fractional forecast difference. WOS continues to use the unrounded weekly forecast. This prevents artificial 1-unit disagreement across pages; it does not alter available stock, fairness constraints, the optimization objective or reported allocations. A focused fractional-case regression test was added.
+
+**User-run evidence:** CP8.2A: 32 focused tests passed; CP8.2B: 68 passed; CP8.2C: 96 passed; CP8.2D: 59 passed. Pre-CP8.3A full suite: 536 passed, 17 existing PuLP deprecation warnings. After CP8.3A: **537 passed, zero failed, 18 warnings** (17 existing PuLP and one newly introduced NumPy generic-timedelta warning in the regression test itself). The test-only warning has a source-level correction in the accompanying final-doc cleanup; its post-correction status must be established by the next user-run `pytest`, not inferred. Source/UI screenshots are **local synthetic demo** evidence, not independent Cloud validation.
+
+**Eight-week local smoke (user-supplied screenshots):** Forecast created 2,728 weekly rows for 25 sites, with 176 review rows. Saved Allocate produced 331,802 modeled allocated units and 55,486 planning unmet; 239,704 units on-hand-backed draft and 92,098 dependent on confirmed inbound. Alerts surfaced full-cycle gap flags even where WOS was adequate. A hypothetical pending-arrival scenario was visibly kept separate from the saved baseline. The PDF appeared as **one page**, marked **SYNTHETIC DEMONSTRATION**, with historical distributions 366,842, modeled shortfall 55,486 and SKU gap 55,486; no dollar total was fabricated from missing prices. The PDF screenshot predates CP8.3A's rounding alignment and must not be described as its post-change Cloud verification. No real inventory, purchases, deliveries or community impact were verified.
+
+**Still pending for release:** Reviewed selective Git commit and push, public Streamlit Cloud smoke of the final commit, accessible 4–6-minute English video, dated LinkedIn deliverable evidence, final accepted user/maintenance docs, Benjamin's explicit approval or waiver of the strict worst-partner fill-rise criterion, ChiEAC stewardship/ownership, and final handoff. Do not create `v1.0` solely from regression success. Preserve the four pre-existing untracked Gate 4 scratch files.

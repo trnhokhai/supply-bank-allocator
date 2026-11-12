@@ -8,6 +8,7 @@ from src.allocation_ui import (
     comparison_summary,
     csv_download,
     input_signature,
+    partner_decision_view,
     partner_summary,
     verified_capacity_overrides,
     worst_fill_display,
@@ -26,6 +27,28 @@ def _plan():
          "need_units": 50, "allocated_units": 40, "unmet_units": 10,
          "ready_now_units": 40, "awaiting_inbound_units": 0, "equity_weight": 1.0},
     ])
+
+
+def test_partner_decision_view_tells_staff_who_is_uncovered_and_what_is_planned():
+    plan = _plan()
+    extra = pd.DataFrame([
+        {"site_id": "C", "site_name": "Gamma", "product": "diaper", "size": "6",
+         "need_units": 20, "allocated_units": 0, "unmet_units": 20,
+         "ready_now_units": 0, "awaiting_inbound_units": 0, "equity_weight": 1.0},
+        {"site_id": "D", "site_name": "Delta", "product": "diaper", "size": "5",
+         "need_units": 20, "allocated_units": 20, "unmet_units": 0,
+         "ready_now_units": 20, "awaiting_inbound_units": 0, "equity_weight": 1.0},
+    ])
+    summary = partner_summary(pd.concat([plan, extra], ignore_index=True))
+    original = summary.copy(deep=True)
+    view = partner_decision_view(summary)
+    assert view.iloc[0]["site_id"] == "C"
+    assert view.set_index("site_id").loc["C", "coverage_status"] == "No allocation"
+    assert view.set_index("site_id").loc["A", "coverage_status"] == "Partially covered"
+    assert view.set_index("site_id").loc["D", "coverage_status"] == "Fully covered"
+    assert view.set_index("site_id").loc["A", "ready_now_units"] == 65
+    assert view.set_index("site_id").loc["A", "awaiting_inbound_units"] == 25
+    pd.testing.assert_frame_equal(summary, original)
 
 
 def test_site_rollup_uses_aggregate_units_not_average_of_size_rates():
@@ -119,6 +142,18 @@ def test_worst_fill_display_uses_same_precision_as_label(raw_delta_pp, display_d
 def test_worst_fill_display_rejects_unknown_change(raw):
     with pytest.raises(AllocationError, match="Worst-site fill change"):
         worst_fill_display(raw)
+
+
+def test_allocate_staff_view_keeps_partner_and_size_action_drilldown():
+    from pathlib import Path
+    page = (Path(__file__).resolve().parents[1] / "pages" / "3_Allocate.py").read_text(encoding="utf-8")
+    assert 'partner_decision_view(by_site)' in page
+    assert 'Coverage review queue (first 8; not an urgency ranking)' in page
+    assert 'lower unrounded fill rate first, then more uncovered units' in page
+    assert 'apparent ties may still have different positions' in page
+    assert '"Show all {len(partner_view)} partner plans"' in page
+    assert '"Inspect what a partner is planned to receive by size"' in page
+    assert '"Staff review action"' in page
 
 
 def test_allocate_page_uses_display_precision_for_message():

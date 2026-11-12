@@ -15,6 +15,7 @@ from src.allocation_ui import (
     comparison_summary,
     csv_download,
     input_signature,
+    partner_decision_view,
     partner_summary,
     verified_capacity_overrides,
     worst_fill_display,
@@ -81,30 +82,40 @@ st.caption(
 if forecast_state.get("demo_optin"):
     st.warning("Retrospective synthetic demo mode: undated survey inputs were explicitly allowed. This is NOT real-world validation.")
 
-st.subheader("1 · Planning settings")
+st.subheader("1 · Plan a distribution cycle")
+st.info(
+    "**First time here?** Keep the default equity and fairness settings, choose how many "
+    "forecast weeks to plan, then select **Optimize allocation**. For an eight-week "
+    "Funder Report, first generate an eight-week Forecast and choose an eight-week cycle here."
+)
 with st.form("g4_allocation_controls", clear_on_submit=False):
-    c1, c2, c3 = st.columns(3)
-    cycle_weeks = c1.slider("Planning cycle (weeks)", min_value=1,
+    cycle_weeks = st.slider("Planning cycle (weeks)", min_value=1,
                             max_value=max_cycle, value=min(4, max_cycle), step=1,
                             help="Choose the first N consecutive weeks of the displayed forecast.")
-    alpha = c2.slider("Poverty-share weight (alpha)", min_value=0.0, max_value=2.0,
-                      value=0.5, step=0.05)
-    beta = c3.slider("Priority-population weight (beta)", min_value=0.0, max_value=1.0,
-                     value=0.25, step=0.05)
-    d1, d2 = st.columns(2)
-    fairness = d1.slider("Requested minimum fill (fairness floor)",
-                         min_value=0.0, max_value=1.0, value=0.60, step=0.05,
-                         help="May be adjusted downward for SKU-level shortages or indivisible units; adjustments are reported.")
-    penalty = d2.slider("Maximum-site-shortfall penalty (share of network need)",
-                        min_value=0.0, max_value=0.20, value=0.01, step=0.01,
-                        help="Adds share × total planning need × worst-site shortfall rate to weighted unmet need. Not a hard guarantee.")
-
-    protect_fill = st.checkbox(
-        "Protect worst-partner fill rate against proportional baseline",
-        value=True,
-        help="Keeps the lowest partner fill at least as high as the same-constraint proportional baseline. "
-             "May reduce weighted unmet improvement; uncheck to explore the soft-penalty trade-off.",
-    )
+    with st.expander("Advanced: equity and fairness settings (optional)", expanded=False):
+        st.caption(
+            "Default weights use available partner survey information; without it, "
+            "partners receive equal weights. The 60% requested minimum may be reduced "
+            "when individual sizes are scarce. Worst-partner baseline protection is on by default."
+        )
+        c1, c2 = st.columns(2)
+        alpha = c1.slider("Poverty-share weight (alpha)", min_value=0.0, max_value=2.0,
+                          value=0.5, step=0.05)
+        beta = c2.slider("Priority-population weight (beta)", min_value=0.0, max_value=1.0,
+                         value=0.25, step=0.05)
+        d1, d2 = st.columns(2)
+        fairness = d1.slider("Requested minimum fill (fairness floor)",
+                             min_value=0.0, max_value=1.0, value=0.60, step=0.05,
+                             help="May be adjusted downward for SKU-level shortages or indivisible units; adjustments are reported.")
+        penalty = d2.slider("Maximum-site-shortfall penalty (share of network need)",
+                            min_value=0.0, max_value=0.20, value=0.01, step=0.01,
+                            help="Adds share × total planning need × worst-site shortfall rate to weighted unmet need. Not a hard guarantee.")
+        protect_fill = st.checkbox(
+            "Protect worst-partner fill rate against proportional baseline",
+            value=True,
+            help="Keeps the lowest partner fill at least as high as the same-constraint proportional baseline. "
+                 "May reduce weighted unmet improvement; uncheck to explore the soft-penalty trade-off.",
+        )
     with st.expander("Optional: verified storage capacity limits (individual units)"):
         st.caption("Do NOT enter survey storage capacity in cases here. Only use a verified total individual-unit cap "
                    "for each partner for the whole planning cycle. Leave blank when unknown.")
@@ -179,20 +190,26 @@ st.caption(
     f"(including solver {solved['elapsed_seconds']:.2f}s)"
 )
 
-st.caption(
-    f"Solver: **{solved['solver_backend']}** · solver time: "
-    f"**{solved['solver_seconds']:.3f}s** · certified MIP relative gap: "
-    f"**{solved['certified_mip_gap']:.2g}** · "
-    f"Baseline worst-site protection: "
-    f"**{'ON' if solved['baseline_fill_protection'] else 'OFF'}**. "
-    "A positive certified gap is not a proof of exact zero-gap optimality."
-)
-
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Cycle allocated", f"{ops['allocated_cycle_units']:,} units")
 c2.metric("Planning unmet", f"{metrics['total_unmet_units']:,} units")
-c3.metric("Ready from on-hand", f"{ops['ready_now_units']:,} units")
-c4.metric("Awaiting incoming", f"{ops['awaiting_inbound_units']:,} units")
+c3.metric("On-hand-backed draft", f"{ops['ready_now_units']:,} units")
+c4.metric("Depends on inbound", f"{ops['awaiting_inbound_units']:,} units")
+st.info(
+    "**Next step for staff:** Review **By partner** and **Allocation by product and size** "
+    "below. The on-hand-backed figure is a **draft**, not a verified pick quantity; "
+    "confirm the physical count, existing commitments and partner capacity. "
+    "Inbound-backed units must not be picked or promised before receipt."
+)
+with st.expander("Advanced: solver diagnostics", expanded=False):
+    st.caption(
+        f"Solver: **{solved['solver_backend']}** · solver time: "
+        f"**{solved['solver_seconds']:.3f}s** · certified MIP relative gap: "
+        f"**{solved['certified_mip_gap']:.2g}** · "
+        f"Baseline worst-site protection: "
+        f"**{'ON' if solved['baseline_fill_protection'] else 'OFF'}**. "
+        "A positive certified gap is not a proof of exact zero-gap optimality."
+    )
 
 warnings = solved["warnings"]
 if not warnings.empty:
@@ -200,13 +217,111 @@ if not warnings.empty:
         "**Planning cautions:** Review the flags below before treating the allocation as an operational commitment. "
         "A ready-now pick suggestion must be checked against physical stock and distribution arrangements."
     )
-    with st.expander(f"Input and planning warnings ({len(warnings)})", expanded=True):
+    with st.expander(f"Input and planning warnings ({len(warnings)})", expanded=False):
         st.dataframe(warnings, width="stretch", hide_index=True)
 if not solved["forecast_issues"].empty:
     with st.expander("Partners with unresolved forecasts — not assumed to have zero demand"):
         st.dataframe(solved["forecast_issues"], width="stretch", hide_index=True)
 
-st.markdown("#### Optimized vs. proportional baseline")
+st.subheader("3 · Which partners need attention?")
+st.caption(
+    "This is a modeled coverage plan, not a record of shipments. Review partners with no "
+    "or partial allocation first; then inspect product sizes and incoming-supply dependencies. "
+    "This queue does not measure unrecorded community need."
+)
+by_site = partner_summary(solved["allocation"])
+partner_view = partner_decision_view(by_site)
+if not partner_view.empty:
+    counts = partner_view["coverage_status"].value_counts()
+    k1, k2, k3 = st.columns(3)
+    k1.metric("No allocation", int(counts.get("No allocation", 0)), help="Partners with modeled need but zero allocated units")
+    k2.metric("Partially covered", int(counts.get("Partially covered", 0)), help="Partners whose modeled need is not fully allocated")
+    k3.metric("Fully covered", int(counts.get("Fully covered", 0)), help="All modeled need allocated; physical shipment is not confirmed")
+    partner_cols = ["site_name", "coverage_status", "fill_rate_pct", "need_units",
+                    "allocated_units", "unmet_units", "ready_now_units",
+                    "awaiting_inbound_units", "next_check"]
+    partner_labels = {
+        "site_name": "Partner",
+        "coverage_status": "Coverage status",
+        "fill_rate_pct": st.column_config.NumberColumn("Fill rate (%)", format="%.1f%%"),
+        "need_units": "Forecast need (units)",
+        "allocated_units": "Planned allocation (units)",
+        "unmet_units": "Uncovered (units)",
+        "ready_now_units": "On-hand-backed draft (units)",
+        "awaiting_inbound_units": "Depends on inbound (units)",
+        "next_check": st.column_config.TextColumn("Next staff check", width="large"),
+    }
+    st.markdown("**Coverage review queue (first 8; not an urgency ranking)**")
+    st.caption(
+        "Review order: no allocation, then partially covered, fully covered, and no modeled need. "
+        "Within each group, lower unrounded fill rate first, then more uncovered units, then partner name. "
+        "Displayed fill rates round to one decimal, so apparent ties may still have different positions."
+    )
+    st.dataframe(partner_view[partner_cols].head(8), hide_index=True,
+                 width="stretch", column_config=partner_labels)
+    with st.expander(f"Show all {len(partner_view)} partner plans"):
+        st.dataframe(partner_view[partner_cols], hide_index=True,
+                     width="stretch", column_config=partner_labels)
+    st.caption("Zero modeled need is not proof of zero actual need. "
+               "Pending forecast issues are not counted as zero demand.")
+
+    choices = partner_view["site_id"].astype(str).tolist()
+    names = dict(zip(partner_view["site_id"].astype(str), partner_view["site_name"].astype(str)))
+    selected_partner_id = st.selectbox(
+        "Inspect what a partner is planned to receive by size", choices,
+        format_func=lambda sid: names.get(sid, sid),
+    )
+    selected_partner = partner_view.loc[
+        partner_view["site_id"].astype(str).eq(selected_partner_id)
+    ].iloc[0]
+    st.info(
+        f"**{selected_partner['site_name']}:** planning need "
+        f"**{int(selected_partner['need_units']):,}** units, planned allocation "
+        f"**{int(selected_partner['allocated_units']):,}**, remaining gap "
+        f"**{int(selected_partner['unmet_units']):,}**. Of the planned units, "
+        f"**{int(selected_partner['ready_now_units']):,}** are backed by recorded on-hand "
+        f"stock and **{int(selected_partner['awaiting_inbound_units']):,}** depend on "
+        "confirmed incoming supply. None are automatically approved shipments."
+    )
+    detail = solved["allocation"].loc[
+        solved["allocation"]["site_id"].astype(str).eq(selected_partner_id)
+    ].copy()
+    def next_step_for_size(row):
+        if row["need_units"] > 0 and row["allocated_units"] == 0:
+            return "No planned allocation — review"
+        if row["unmet_units"] > 0:
+            return "Review uncovered units"
+        if row["awaiting_inbound_units"] > 0:
+            return "Confirm inbound before picking"
+        if row["need_units"] == 0:
+            return "No modeled need — verify if unexpected"
+        return "Check physical stock before picking"
+    detail["staff_check"] = detail.apply(next_step_for_size, axis=1)
+    detail = detail.sort_values(["unmet_units", "product", "size"],
+                                ascending=[False, True, True])
+    detail_cols = ["product", "size", "need_units", "allocated_units", "unmet_units",
+                   "ready_now_units", "awaiting_inbound_units", "staff_check", "requires_review"]
+    st.dataframe(
+        detail[detail_cols], hide_index=True, width="stretch",
+        column_config={
+            "product": "Product", "size": "Size",
+            "need_units": "Forecast need", "allocated_units": "Planned units",
+            "unmet_units": "Not covered", "ready_now_units": "On-hand-backed draft",
+            "awaiting_inbound_units": "Needs inbound receipt",
+            "staff_check": st.column_config.TextColumn("Staff review action", width="large"),
+            "requires_review": "Forecast flagged",
+        },
+    )
+    if detail["requires_review"].any():
+        st.warning("This partner has forecast-quality flags. Check those product sizes before "
+                   "relying on the modeled quantities.")
+    st.caption("Planned allocations are drafts. Confirm stock, commitments, capacities and receipt dates "
+               "with authorized staff before picking, shipping or promising any quantities.")
+if not solved["forecast_issues"].empty:
+    st.warning("Some partners or sizes have unresolved forecasts and may be absent from the allocation. "
+               "Review the forecast issues above; missing output is not zero need.")
+
+st.subheader("4 · How does this plan compare with a proportional split?")
 b1, b2, b3, b4 = st.columns(4)
 b1.metric("Optimized weighted unmet", f"{comparison['optimized_weighted_unmet']:,.1f}",
           delta=f"{comparison['weighted_units_improved']:+,.1f} weighted units improved")
@@ -272,12 +387,7 @@ with st.expander("Inventory and confirmed supply actually considered"):
     st.caption("Available for the cycle is NOT necessarily available for immediate picking. "
                "Stock counted after the snapshot date is not silently included twice.")
 
-st.markdown("#### By partner")
-by_site = partner_summary(solved["allocation"])
-st.dataframe(by_site, width="stretch", hide_index=True,
-             column_config={"fill_rate_pct": st.column_config.NumberColumn("Fill rate (%)", format="%.1f%%")})
-
-st.markdown("#### Allocation by product and size")
+st.markdown("#### Full allocation by product and size (all partners)")
 allocation = solved["allocation"]
 show_columns = [
     "site_name", "site_id", "product", "size", "need_units", "allocated_units",
@@ -287,7 +397,7 @@ show_columns = [
 st.dataframe(allocation[[c for c in show_columns if c in allocation.columns]],
              width="stretch", hide_index=True)
 
-st.subheader("3 · Download planning outputs")
+st.subheader("5 · Download planning outputs")
 left, middle, right = st.columns(3)
 left.download_button(
     "Allocation plan (CSV)", csv_download(allocation),

@@ -13,6 +13,8 @@ from math import isfinite
 import numpy as np
 import pandas as pd
 
+from src.allocate import AllocationError, forecast_cycle_needs
+
 SKU = ["product", "size"]
 REQUIRED_FORECAST = ["site_id"] + SKU + ["week_start", "forecast_units", "requires_review"]
 ALERT_COLUMNS = SKU + [
@@ -175,6 +177,19 @@ def build_inventory_alerts(
     )
     if aggregated["forecast_weeks"].ne(count).any():
         raise AlertsError("A product/size forecast is incomplete in the selected cycle.")
+    # Match the integer planning quantities used by Allocate and the Funder Report.
+    # Keep the unrounded forecast for WOS and inventory-mix diagnostics.
+    try:
+        rounded_needs = forecast_cycle_needs(selected, cycle_weeks=count)
+    except AllocationError as exc:
+        raise AlertsError("Cannot reconcile integer cycle planning needs.") from exc
+    rounded_by_sku = rounded_needs.groupby(SKU, as_index=False)["need_units"].sum()
+    aggregated = aggregated.merge(
+        rounded_by_sku.rename(columns={"need_units": "integer_cycle_need_units"}),
+        on=SKU, how="left", validate="one_to_one",
+    )
+    if aggregated["integer_cycle_need_units"].isna().any():
+        raise AlertsError("Integer cycle planning needs are incomplete.")
     aggregated["mean_weekly_forecast_units"] = aggregated["forecast_cycle_units"] / count
 
     inv = _table(prepared.get("on_hand"), SKU + ["on_hand_units"], "On-hand inventory")
@@ -216,8 +231,10 @@ def build_inventory_alerts(
     ]
     gap = (short_weeks * result["mean_weekly_forecast_units"] - result["projected_cycle_units"]).clip(lower=0)
     result["gap_to_short_threshold_units"] = np.where(positive, np.ceil(gap), np.nan)
-    cycle_gap = (result["forecast_cycle_units"] - result["projected_cycle_units"]).clip(lower=0)
-    result["cycle_supply_gap_units"] = np.where(positive, np.ceil(cycle_gap), np.nan)
+    # A whole-unit planning gap must reconcile with the saved allocation/report
+    # need contract; ceiling the fractional forecast can differ by one unit.
+    cycle_gap = (result["integer_cycle_need_units"] - result["projected_cycle_units"]).clip(lower=0)
+    result["cycle_supply_gap_units"] = np.where(positive, cycle_gap, np.nan)
     result["short_weeks"] = float(short_weeks)
     result["cycle_weeks"] = count  # Recommendation context only; not exported.
     result["recommendation"] = [_recommendation(row) for _, row in result.iterrows()]

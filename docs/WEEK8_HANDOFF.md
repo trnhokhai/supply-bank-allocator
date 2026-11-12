@@ -50,3 +50,7 @@
 ## November 10 technical addendum — CP8.1 local closeout
 
 The previous quick-handoff snapshot is historical. At local pre-commit `main` HEAD `feb4430`, CP8.1 added a display-only 26-week historical comparison to Forecast's Individual Series. Local screenshot review and post-warning-fix tests: **530 user-run local tests passed, 17 warnings (legacy PuLP reference).** No changes to forecasting models, WAPE, allocation, survey, report or paid/commercial features. See `docs/PROJECT_STATE.md` Section 31 and `docs/DECISIONS.md` Decision 049 for details. Confirm actual GitHub main after the CP8.1 commit/push rather than trusting this snapshot. Week 8 still must prioritize nonprofit-staff usability in Allocate/Alerts and the previously documented release/acceptance blockers. No new deliverable, signoff, video, deployment or `v1.0` release is implied.
+
+## November 11 Week 8 closeout addendum
+
+For the latest CP8.2A–D/CP8.3A local implementation, decision rules and evidence, see `docs/PROJECT_STATE.md` Section 32, `docs/DECISIONS.md` Decision 050 and the Week 8 update in `docs/acceptance_matrix.md`. User-run regression: 537 passed (18 warnings before the test-only NumPy warning correction). The old top-of-file Week 7 snapshot is historical. **Final Git push, final Cloud validation, video, public communications, organization ownership, Benjamin acceptance and `v1.0` are not yet confirmed.** Follow the existing narrow-scope/noncommercial safety gates.
